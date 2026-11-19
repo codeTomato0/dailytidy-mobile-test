@@ -255,6 +255,11 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
         }
       };
       var SWIPE_THRESHOLD = 15;
+      var SWIPE_SAMPLE_MS = 175;
+      var SWIPE_RELEASE_MS = 155;
+      var ROOM_FRICTION = 7;
+      var MAX_ROOM_SPEED = 2450;
+      var MIN_ROOM_SPEED = 32;
       var INK = new Color('#50321F');
       var DailyTidyRoot = exports('DailyTidyRoot', (_dec = ccclass('DailyTidyRoot'), _dec(_class = /*#__PURE__*/function (_Component) {
         _inheritsLoose(DailyTidyRoot, _Component);
@@ -300,6 +305,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           _this.soundEnabled = true;
           _this.roomPosition = null;
           _this.roomTouch = null;
+          _this.roomVelocity = 0;
           _this.levelRoot = null;
           _this.overlay = null;
           _this.status = null;
@@ -387,6 +393,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           return start;
         }();
         _proto.update = function update(dt) {
+          this.advanceRoom(dt);
           if (!this.weatherView || !this.room) return;
           var window = this.weatherView.node;
           var left = window.position.x + this.room.position.x;
@@ -433,6 +440,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           }
           this.total = _extends({}, this.remaining);
           this.roomTouch = null;
+          this.roomVelocity = 0;
           this.busy = false;
           this.overlay = null;
           this.clearDynamicNodes();
@@ -584,7 +592,12 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.itemViews = [];
           var roomSize = this.frames.get(ROOM_ASSET).originalSize;
           var artScale = ROOM_VIEW_H / roomSize.height;
-          this.level.piles.forEach(function (pile, pileIndex) {
+          var order = Array.from(this.level.piles.keys()).sort(function (a, b) {
+            return _this5.level.piles[a].y - _this5.level.piles[b].y;
+          });
+          var _loop = function _loop() {
+            var pileIndex = _step3.value;
+            var pile = _this5.level.piles[pileIndex];
             var baseWidth = pile.width * artScale;
             var baseX = (pile.x - roomSize.width / 2) * artScale;
             var contactY = (roomSize.height / 2 - pile.y) * artScale;
@@ -596,7 +609,6 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
               var n = _this5.makeNode(_this5.room, kind + "-" + pileIndex + "-" + index);
               var angle = (_pile$angle = pile.angle) != null ? _pile$angle : 0;
               var offset = index === 0 ? 0 : baseWidth * ((_pile$stackOffset = pile.stackOffset) != null ? _pile$stackOffset : 0);
-              n.setPosition(baseX + offset, contactY);
               n.angle = index === 0 ? angle : angle * 0.45;
               var trans = n.addComponent(UITransform);
               var sprite = n.addComponent(Sprite);
@@ -609,14 +621,19 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
               var width = visibleWidth / footprint.width;
               var height = width * source.height / source.width;
               var visibleHeight = height * footprint.height;
+              var ball = kind === 'ball';
               trans.setContentSize(width, height);
-              trans.setAnchorPoint(footprint.center, footprint.bottom);
+              // A ball rotates around its center while its contact point stays on the floor.
+              trans.setAnchorPoint(footprint.center, footprint.bottom + (ball ? footprint.height / 2 : 0));
+              n.setPosition(baseX + offset, contactY + (ball ? visibleHeight / 2 : 0));
               _this5.itemViews.push({
                 node: n,
                 kind: kind,
                 pile: pileIndex,
                 index: index,
                 home: n.position.clone(),
+                homeAngle: n.angle,
+                rollOffset: 0,
                 visibleWidth: visibleWidth,
                 visibleHeight: visibleHeight,
                 contactShadow: contactShadow
@@ -625,7 +642,10 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
               // The contact is on the top face of the book or folded shirt below.
               contactY += visibleHeight * 0.43;
             });
-          });
+          };
+          for (var _iterator3 = _createForOfIteratorHelperLoose(order), _step3; !(_step3 = _iterator3()).done;) {
+            _loop();
+          }
         };
         _proto.drawContactShadow = function drawContactShadow(x, y, width) {
           var shadow = this.makeNode(this.room, 'Contact shadow');
@@ -758,30 +778,54 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
         _proto.beginRoomTouch = function beginRoomTouch(e) {
           var id = e.getID();
           if (id === null || this.busy || this.overlay || this.roomTouch || !this.room) return;
+          this.roomVelocity = 0;
+          var start = this.localPoint(e);
           this.roomTouch = {
             id: id,
-            start: this.localPoint(e),
-            origin: this.room.position.clone(),
-            swiping: false
+            start: start,
+            originX: this.room.position.x,
+            swiping: false,
+            samples: [{
+              x: start.x,
+              time: performance.now()
+            }]
           };
         };
         _proto.moveRoomTouch = function moveRoomTouch(e) {
           var touch = this.roomTouch;
           if (!touch || touch.id !== e.getID()) return;
           var point = this.localPoint(e);
+          var now = performance.now();
+          touch.samples = touch.samples.filter(function (sample) {
+            return now - sample.time <= SWIPE_SAMPLE_MS;
+          });
+          touch.samples.push({
+            x: point.x,
+            time: now
+          });
           var dx = point.x - touch.start.x;
           var dy = point.y - touch.start.y;
           if (!touch.swiping && dx * dx + dy * dy < SWIPE_THRESHOLD * SWIPE_THRESHOLD) return;
           touch.swiping = true;
-          this.panRoom(touch.origin.x + dx);
+          this.panRoom(touch.originX + dx);
         };
         _proto.endRoomTouch = function endRoomTouch(e) {
           var touch = this.roomTouch;
           if (!touch || touch.id !== e.getID()) return;
-          this.moveRoomTouch(e);
-          this.roomTouch = null;
-          if (touch.swiping) return;
           var point = this.localPoint(e);
+          var latest = touch.samples[touch.samples.length - 1];
+          if (!touch.swiping || Math.abs(point.x - latest.x) >= 0.5) this.moveRoomTouch(e);
+          this.roomTouch = null;
+          if (touch.swiping) {
+            var first = touch.samples[0];
+            var last = touch.samples[touch.samples.length - 1];
+            var elapsed = (last.time - first.time) / 1000;
+            if (elapsed >= 0.012 && performance.now() - last.time < SWIPE_RELEASE_MS) {
+              var speed = (last.x - first.x) / elapsed;
+              this.roomVelocity = Math.max(-MAX_ROOM_SPEED, Math.min(MAX_ROOM_SPEED, speed));
+            }
+            return;
+          }
           if (Math.abs(point.x) > W / 2 || Math.abs(point.y - ROOM_VIEW_Y) > ROOM_VIEW_H / 2) return;
           var item = this.itemAt(e);
           if (item) this.collectItem(item);
@@ -790,10 +834,19 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           var _this$roomTouch;
           if (((_this$roomTouch = this.roomTouch) == null ? void 0 : _this$roomTouch.id) === e.getID()) this.roomTouch = null;
         };
+        _proto.advanceRoom = function advanceRoom(dt) {
+          if (!this.room || Math.abs(this.roomVelocity) < MIN_ROOM_SPEED) return;
+          var decay = Math.exp(-ROOM_FRICTION * Math.min(dt, 0.05));
+          var target = this.room.position.x + this.roomVelocity * (1 - decay) / ROOM_FRICTION;
+          this.roomVelocity *= decay;
+          if (this.panRoom(target) !== target) this.roomVelocity = 0;
+        };
         _proto.panRoom = function panRoom(x) {
           var limitX = (this.roomWidth - W) / 2;
-          this.room.setPosition(Math.max(-limitX, Math.min(limitX, x)), 0);
+          var position = Math.max(-limitX, Math.min(limitX, x));
+          this.room.setPosition(position, 0);
           this.updateRoomPosition();
+          return position;
         };
         _proto.updateRoomPosition = function updateRoomPosition() {
           if (!this.roomPosition) return;
@@ -816,7 +869,11 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             if (!item.node.isValid) continue;
             var transform = item.node.getComponent(UITransform);
             var point = transform.convertToNodeSpaceAR(world);
-            if (Math.abs(point.x) <= item.visibleWidth / 2 + 3 && point.y >= -3 && point.y <= item.visibleHeight + 3) {
+            if (item.kind === 'ball') {
+              var x = point.x / (item.visibleWidth / 2 + 3);
+              var y = point.y / (item.visibleHeight / 2 + 3);
+              if (x * x + y * y <= 1) return item;
+            } else if (Math.abs(point.x) <= item.visibleWidth / 2 + 3 && point.y >= -3 && point.y <= item.visibleHeight + 3) {
               return item;
             }
           }
@@ -826,9 +883,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           var _view$contactShadow,
             _this7 = this;
           if (view.index !== this.piles[view.pile].length - 1) {
-            var _this$audio3;
-            (_this$audio3 = this.audio) == null || _this$audio3.play('blocked');
-            this.setStatus('Only the top item can be moved.');
+            this.wiggleBlockedItem(view);
             return;
           }
           var category = ITEM_CATEGORY[view.kind];
@@ -836,9 +891,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             return b.category === category;
           });
           if (!bin) {
-            var _this$audio4;
-            (_this$audio4 = this.audio) == null || _this$audio4.play('blocked');
-            this.setStatus("No " + CATEGORY_NAME[category] + " box open yet.");
+            this.returnFromTrays(view);
             return;
           }
           this.hideStatus();
@@ -885,6 +938,111 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             }
           }).start();
         };
+        _proto.wiggleBlockedItem = function wiggleBlockedItem(item) {
+          var _this$audio3,
+            _this8 = this;
+          this.hideStatus();
+          (_this$audio3 = this.audio) == null || _this$audio3.play('blocked');
+          Tween.stopAllByTarget(item.node);
+          item.node.setPosition(item.home);
+          item.node.setScale(1, 1);
+          this.busy = true;
+          tween(item.node).to(0.06, {
+            angle: item.homeAngle - 6
+          }).to(0.08, {
+            angle: item.homeAngle + 5
+          }).to(0.08, {
+            angle: item.homeAngle
+          }).call(function () {
+            _this8.busy = false;
+          }).start();
+        };
+        _proto.returnFromTrays = function returnFromTrays(item) {
+          var _this9 = this;
+          this.hideStatus();
+          var node = item.node;
+          Tween.stopAllByTarget(node);
+          node.setPosition(item.home);
+          node.setScale(1, 1);
+          node.angle = item.homeAngle;
+          var parent = node.parent;
+          var sibling = node.getSiblingIndex();
+          node.setParent(this.levelRoot, true);
+          var landing = node.position.clone();
+          var tray = this.bins.reduce(function (nearest, bin) {
+            return Math.abs(bin.x - landing.x) < Math.abs(nearest.x - landing.x) ? bin : nearest;
+          });
+          this.busy = true;
+          tween(node).to(0.29, {
+            position: new Vec3(tray.x, ROOM_TOP - 12, 0),
+            scale: new Vec3(0.82, 0.82, 1),
+            angle: item.homeAngle - 8
+          }, {
+            easing: 'cubicOut'
+          }).call(function () {
+            var _this9$audio;
+            return (_this9$audio = _this9.audio) == null ? void 0 : _this9$audio.play('blocked');
+          }).to(0.10, {
+            angle: item.homeAngle + 8
+          }, {
+            easing: 'sineInOut'
+          }).to(0.27, {
+            position: landing,
+            scale: new Vec3(1, 1, 1),
+            angle: item.homeAngle
+          }, {
+            easing: 'quadIn'
+          }).call(function () {
+            node.setParent(parent);
+            node.setSiblingIndex(sibling);
+            node.setPosition(item.home);
+            if (item.kind === 'ball') _this9.bounceBall(item);else _this9.busy = false;
+          }).start();
+        };
+        _proto.bounceBall = function bounceBall(item) {
+          var _this10 = this;
+          var rise = Math.min(22, item.visibleHeight * 0.32);
+          // Alternate the short roll about the original anchor so retries stay on the same surface.
+          var roll = item.rollOffset === 0 ? 10 : -item.rollOffset;
+          var rolled = new Vec3(item.home.x + roll, item.home.y, item.home.z);
+          var angle = item.homeAngle - 2 * roll / item.visibleWidth * 180 / Math.PI;
+          tween(item.node).to(0.11, {
+            position: new Vec3(item.home.x, item.home.y + rise, 0)
+          }, {
+            easing: 'quadOut'
+          }).to(0.13, {
+            position: item.home
+          }, {
+            easing: 'quadIn'
+          }).to(0.07, {
+            position: new Vec3(item.home.x, item.home.y + rise * 0.3, 0)
+          }, {
+            easing: 'quadOut'
+          }).to(0.08, {
+            position: item.home
+          }, {
+            easing: 'quadIn'
+          }).call(function () {
+            var shadow = item.contactShadow;
+            if (shadow) {
+              tween(shadow).to(0.2, {
+                position: new Vec3(shadow.position.x + roll, shadow.position.y, shadow.position.z)
+              }, {
+                easing: 'cubicOut'
+              }).start();
+            }
+          }).to(0.2, {
+            position: rolled,
+            angle: angle
+          }, {
+            easing: 'cubicOut'
+          }).call(function () {
+            item.home.set(rolled);
+            item.homeAngle = angle;
+            item.rollOffset += roll;
+            _this10.busy = false;
+          }).start();
+        };
         _proto.finishBin = function finishBin(bin) {
           var candidates = this.availableCategories();
           if (!candidates.length) {
@@ -894,28 +1052,28 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             return;
           }
           if (this.level.mode === 'auto') {
-            var _this$audio5;
+            var _this$audio4;
             var next = candidates[0];
             bin.category = next;
             this.renderBin(bin);
             this.busy = false;
-            (_this$audio5 = this.audio) == null || _this$audio5.play('change_box');
+            (_this$audio4 = this.audio) == null || _this$audio4.play('change_box');
             this.setStatus(CATEGORY_NAME[next] + " box is ready!");
           } else {
             this.showChoice(bin, candidates);
           }
         };
         _proto.availableCategories = function availableCategories() {
-          var _this8 = this;
+          var _this11 = this;
           var order = ['toys', 'books', 'clothes', 'sports'];
           return order.filter(function (c) {
-            return _this8.remaining[c] > 0 && !_this8.bins.some(function (b) {
+            return _this11.remaining[c] > 0 && !_this11.bins.some(function (b) {
               return b.category === c;
             });
           });
         };
         _proto.showChoice = function showChoice(bin, candidates) {
-          var _this9 = this;
+          var _this12 = this;
           this.overlay = this.makeNode(this.node, 'Choose next box');
           this.overlay.addComponent(UITransform).setContentSize(W, H);
           this.overlay.addComponent(BlockInputEvents);
@@ -927,26 +1085,26 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           var gap = 20;
           candidates.forEach(function (category, i) {
             var x = (i - (candidates.length - 1) / 2) * (width + gap);
-            var button = _this9.makeSprite(_this9.overlay, "bin_" + category, x, -35, width, 110);
-            _this9.drawCategoryIcon(button, category, -65, 1);
-            _this9.makeLabel(button, CATEGORY_NAME[category], 26, 11, width - 80, 34, 27, INK, true);
-            _this9.makeLabel(button, _this9.remaining[category] + " items", 26, -20, width - 80, 28, 21, INK);
+            var button = _this12.makeSprite(_this12.overlay, "bin_" + category, x, -35, width, 110);
+            _this12.drawCategoryIcon(button, category, -65, 1);
+            _this12.makeLabel(button, CATEGORY_NAME[category], 26, 11, width - 80, 34, 27, INK, true);
+            _this12.makeLabel(button, _this12.remaining[category] + " items", 26, -20, width - 80, 28, 21, INK);
             button.on(Node.EventType.TOUCH_END, function () {
-              var _this9$overlay, _this9$audio;
+              var _this12$overlay, _this12$audio;
               bin.category = category;
-              _this9.renderBin(bin);
-              (_this9$overlay = _this9.overlay) == null || _this9$overlay.destroy();
-              _this9.overlay = null;
-              _this9.busy = false;
-              (_this9$audio = _this9.audio) == null || _this9$audio.play('change_box');
-              _this9.setStatus(CATEGORY_NAME[category] + " box is ready!");
-            }, _this9);
+              _this12.renderBin(bin);
+              (_this12$overlay = _this12.overlay) == null || _this12$overlay.destroy();
+              _this12.overlay = null;
+              _this12.busy = false;
+              (_this12$audio = _this12.audio) == null || _this12$audio.play('change_box');
+              _this12.setStatus(CATEGORY_NAME[category] + " box is ready!");
+            }, _this12);
           });
         };
         _proto.showWin = function showWin() {
-          var _this$audio6,
-            _this10 = this;
-          (_this$audio6 = this.audio) == null || _this$audio6.play('win');
+          var _this$audio5,
+            _this13 = this;
+          (_this$audio5 = this.audio) == null || _this$audio5.play('win');
           this.overlay = this.makeNode(this.node, 'Level complete');
           this.overlay.addComponent(UITransform).setContentSize(W, H);
           this.overlay.addComponent(BlockInputEvents);
@@ -957,7 +1115,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           for (var i = 0; i < 3; i++) this.drawStar(art, (i - 1) * 76, 157, i === 1 ? 37 : 27);
           this.makeLabel(this.overlay, 'ROOM TIDIED!', 0, 70, 560, 72, 42, INK, true);
           var count = Object.keys(this.total).reduce(function (n, key) {
-            return n + _this10.total[key];
+            return n + _this13.total[key];
           }, 0);
           this.makeLabel(this.overlay, count + " items back where they belong.", 0, 0, 530, 54, 25, new Color('#827267'));
           this.makeLabel(this.overlay, this.shownHint ? 'A little help. A lovely tidy room.' : 'Beautifully done — all on your own!', 0, -54, 530, 36, 20, new Color('#9A805F'));
@@ -965,7 +1123,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           var button = this.makeSprite(this.overlay, 'find', 0, -150, 344, 76);
           this.makeLabel(button, last ? 'Play Again' : 'Next Room', 0, 0, 300, 56, 28, INK, true);
           button.on(Node.EventType.TOUCH_END, function () {
-            return _this10.loadLevel(_this10.levelIndex + 1);
+            return _this13.loadLevel(_this13.levelIndex + 1);
           }, this);
         };
         _proto.allClear = function allClear() {
@@ -980,21 +1138,21 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             node.children.forEach(stop);
           };
           for (var _i3 = 0, _arr2 = [].concat(this.node.children); _i3 < _arr2.length; _i3++) {
-            var _this$audio7;
+            var _this$audio6;
             var child = _arr2[_i3];
-            if (child.name !== 'Camera' && child.name !== 'RoomBackdrop' && child !== ((_this$audio7 = this.audio) == null ? void 0 : _this$audio7.node)) {
+            if (child.name !== 'Camera' && child.name !== 'RoomBackdrop' && child !== ((_this$audio6 = this.audio) == null ? void 0 : _this$audio6.node)) {
               stop(child);
               child.destroy();
             }
           }
         };
         _proto.updateProgress = function updateProgress() {
-          var _this11 = this;
+          var _this14 = this;
           var total = Object.keys(this.total).reduce(function (n, c) {
-            return n + _this11.total[c];
+            return n + _this14.total[c];
           }, 0);
           var done = Object.keys(this.collected).reduce(function (n, c) {
-            return n + _this11.collected[c];
+            return n + _this14.collected[c];
           }, 0);
           if (this.progressText) this.progressText.string = done + " / " + total;
           if (!this.progressBar) return;
@@ -1007,13 +1165,14 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           }
         };
         _proto.showHint = function showHint() {
-          var _this12 = this,
+          var _this15 = this,
             _candidates$find,
-            _this$audio8;
+            _this$audio7;
           if (this.busy || this.roomTouch || this.overlay) return;
+          this.roomVelocity = 0;
           var roomX = this.room.position.x;
           var candidates = this.itemViews.filter(function (v) {
-            return v.node.isValid && v.index === _this12.piles[v.pile].length - 1 && _this12.bins.some(function (b) {
+            return v.node.isValid && v.index === _this15.piles[v.pile].length - 1 && _this15.bins.some(function (b) {
               return b.category === ITEM_CATEGORY[v.kind];
             });
           });
@@ -1022,7 +1181,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           })) != null ? _candidates$find : candidates[0];
           if (!next) return;
           this.shownHint = true;
-          (_this$audio8 = this.audio) == null || _this$audio8.play('hint');
+          (_this$audio7 = this.audio) == null || _this$audio7.play('hint');
           if (Math.abs(next.home.x + roomX) + next.visibleWidth / 2 > W / 2 - 18) {
             this.panRoom(-next.home.x);
           }
@@ -1651,11 +1810,17 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           angle: -4,
           stackOffset: 0.24
         },
-        bySideTable: {
-          x: 139,
-          y: 659,
+        leftRugEdge: {
+          x: 120,
+          y: 765,
           width: 76,
           angle: 1
+        },
+        leftRugBall: {
+          x: 535,
+          y: 748,
+          width: 85,
+          angle: 4
         },
         shelfHigh: {
           x: 786,
@@ -1693,6 +1858,12 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
         deskFloor: {
           x: 1124,
           y: 640,
+          width: 81,
+          angle: 2
+        },
+        deskRugEdge: {
+          x: 1061,
+          y: 722,
           width: 81,
           angle: 2
         },
@@ -1754,6 +1925,12 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           y: 679,
           width: 82,
           angle: 2
+        },
+        rightRugEdge: {
+          x: 1705,
+          y: 757,
+          width: 82,
+          angle: 2
         }
       };
       function pile(surface) {
@@ -1779,12 +1956,12 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
         title: 'A Busy Afternoon',
         mode: 'auto',
         active: ['toys', 'books', 'clothes'],
-        piles: [pile('sideTable', 'blue_book'), pile('windowSill', 'red_book', 'green_book'), pile('sofaLeft', 'teddy'), pile('sofaRight', 'shirt'), pile('sofaFoot', 'car'), pile('leftRugBack', 'hat'), pile('leftRugFront', 'red_book', 'shirt'), pile('bySideTable', 'ball'), pile('shelfHigh', 'green_book'), pile('shelfMiddle', 'blue_book', 'red_book'), pile('shelfLow', 'train'), pile('deskCorner', 'red_book', 'hat'), pile('stool', 'shirt', 'hat'), pile('deskFloor', 'ball'), pile('readerShelfMid', 'blue_book'), pile('readerSeat', 'shirt', 'green_book'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightFloor', 'ball')]
+        piles: [pile('sideTable', 'blue_book'), pile('windowSill', 'red_book', 'green_book'), pile('sofaLeft', 'teddy'), pile('sofaRight', 'shirt'), pile('sofaFoot', 'car'), pile('leftRugBack', 'hat'), pile('leftRugFront', 'red_book', 'shirt'), pile('leftRugEdge', 'ball'), pile('shelfHigh', 'green_book'), pile('shelfMiddle', 'blue_book', 'red_book'), pile('shelfLow', 'train'), pile('deskCorner', 'red_book', 'hat'), pile('stool', 'shirt', 'hat'), pile('deskRugEdge', 'ball'), pile('readerShelfMid', 'blue_book'), pile('readerSeat', 'shirt', 'green_book'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightRugEdge', 'ball')]
       }, {
         title: 'Choose Your Next Box',
         mode: 'choose',
         active: ['toys', 'books'],
-        piles: [pile('sideTable', 'green_book'), pile('windowSill', 'blue_book', 'red_book'), pile('windowLeft', 'hat'), pile('sofaLeft', 'shirt', 'red_book'), pile('sofaRight', 'teddy'), pile('sofaFoot', 'train'), pile('leftRugBack', 'ball'), pile('leftRugFront', 'green_book', 'shirt'), pile('shelfHigh', 'blue_book'), pile('shelfMiddle', 'red_book', 'hat'), pile('shelfLow', 'car'), pile('deskCorner', 'blue_book', 'green_book'), pile('stool', 'shirt', 'hat'), pile('deskFloor', 'ball'), pile('deskShelf', 'red_book'), pile('readerShelfMid', 'green_book', 'shirt'), pile('readerShelfLow', 'teddy'), pile('readerSeat', 'shirt'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightFloor', 'ball')]
+        piles: [pile('sideTable', 'green_book'), pile('windowSill', 'blue_book', 'red_book'), pile('windowLeft', 'hat'), pile('sofaLeft', 'shirt', 'red_book'), pile('sofaRight', 'teddy'), pile('sofaFoot', 'train'), pile('leftRugBall', 'ball'), pile('leftRugFront', 'green_book', 'shirt'), pile('shelfHigh', 'blue_book'), pile('shelfMiddle', 'red_book', 'hat'), pile('shelfLow', 'car'), pile('deskCorner', 'blue_book', 'green_book'), pile('stool', 'shirt', 'hat'), pile('deskRugEdge', 'ball'), pile('deskShelf', 'red_book'), pile('readerShelfMid', 'green_book', 'shirt'), pile('readerShelfLow', 'teddy'), pile('readerSeat', 'shirt'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightRugEdge', 'ball')]
       }]);
       cclegacy._RF.pop();
     }
