@@ -14,12 +14,64 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
     }],
     execute: function () {
       cclegacy._RF.push({}, "ee46cE/7pVJBKmOzcVt+i2T", "DailyTidyAudio", undefined);
+      var MUSIC_VOLUME = 0.28;
+      var ROOM_MUSIC = {
+        attic: 'music',
+        bedroom: 'music_bedroom',
+        studio: 'music_studio',
+        office: 'music_office',
+        park: 'music_park'
+      };
       var EFFECT_VOLUME = {
-        collect: 0.34,
-        change_box: 0.34,
         hint: 0.32,
         win: 0.4,
-        blocked: 0.21
+        blocked: 0.21,
+        tap_book: 0.41,
+        tap_cloth: 0.46,
+        tap_hat: 0.39,
+        tap_teddy: 0.40,
+        tap_car: 0.32,
+        tap_train: 0.33,
+        tap_ball: 0.36,
+        tap_metal: 0.35,
+        tap_wrapper: 0.37,
+        drop_box: 0.39,
+        box_lift: 0.37,
+        box_set: 0.55,
+        pinned: 0.31,
+        ball_air: 0.25,
+        ball_land: 0.44,
+        ball_bounce: 0.31,
+        ball_roll: 0.24
+      };
+      var ITEM_TAP_EFFECT = {
+        blue_book: 'tap_book',
+        red_book: 'tap_book',
+        green_book: 'tap_book',
+        shirt: 'tap_cloth',
+        hat: 'tap_hat',
+        teddy: 'tap_teddy',
+        car: 'tap_car',
+        train: 'tap_train',
+        ball: 'tap_ball',
+        pajamas: 'tap_cloth',
+        slipper: 'tap_teddy',
+        towel: 'tap_cloth',
+        yarn: 'tap_teddy',
+        ribbon: 'tap_hat',
+        watercolor: 'tap_metal',
+        brush: 'tap_train',
+        tape: 'tap_wrapper',
+        stapler: 'tap_metal',
+        envelope: 'tap_book',
+        parcel: 'tap_wrapper',
+        folder: 'tap_book',
+        apple: 'tap_ball',
+        sandwich: 'tap_wrapper',
+        flask: 'tap_metal',
+        lantern: 'tap_metal',
+        shuttlecock: 'tap_hat',
+        disc: 'tap_car'
       };
       var AMBIENCE_VOLUME = {
         sunny: 0.23,
@@ -32,20 +84,16 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
           this.ambience = void 0;
           this.environment = new Map();
           this.effects = new Map();
+          this.room = null;
           this.weather = 'sunny';
-          this.receivedGesture = false;
           this.enabled = true;
           this.node = node;
-          this.music = this.createSource('Music', 0.28, true);
+          this.music = this.createSource('Music', MUSIC_VOLUME, true);
           this.ambience = this.createSource('Ambience', AMBIENCE_VOLUME.sunny, true);
         }
         var _proto = DailyTidyAudio.prototype;
         _proto.load = function load() {
           var _this = this;
-          this.loadClip('music', function (clip) {
-            _this.music.clip = clip;
-            if (_this.canPlay()) _this.music.play();
-          });
           var _loop2 = function _loop2() {
             var weather = _step.value;
             _this.loadClip(weather, function (clip) {
@@ -68,10 +116,16 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
             _loop();
           }
         };
-        _proto.unlock = function unlock() {
-          if (this.receivedGesture) return;
-          this.receivedGesture = true;
-          if (this.enabled) this.resumeLoops();
+        _proto.setRoom = function setRoom(room) {
+          var _this2 = this;
+          if (room === this.room) return;
+          this.room = room;
+          this.loadClip(ROOM_MUSIC[room], function (clip) {
+            if (_this2.room !== room || _this2.music.clip === clip) return;
+            if (_this2.music.clip) _this2.music.stop();
+            _this2.music.clip = clip;
+            if (_this2.enabled) _this2.music.play();
+          });
         };
         _proto.setWeather = function setWeather(weather) {
           if (weather === this.weather) return;
@@ -81,11 +135,14 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
         _proto.setEnabled = function setEnabled(enabled) {
           if (enabled === this.enabled) return;
           this.enabled = enabled;
-          if (this.canPlay()) {
-            this.resumeLoops();
+          this.music.volume = enabled ? MUSIC_VOLUME : 0;
+          this.ambience.volume = enabled ? AMBIENCE_VOLUME[this.weather] : 0;
+          if (enabled) {
+            if (this.music.clip && !this.music.playing) this.music.play();
+            if (this.ambience.clip && !this.ambience.playing) this.ambience.play();
           } else {
-            if (this.music.clip) this.music.pause();
-            if (this.ambience.clip) this.ambience.pause();
+            if (this.music.playing) this.music.pause();
+            if (this.ambience.playing) this.ambience.pause();
             for (var _iterator2 = _createForOfIteratorHelperLoose(this.effects.values()), _step2; !(_step2 = _iterator2()).done;) {
               var source = _step2.value;
               source.stop();
@@ -94,7 +151,10 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
         };
         _proto.play = function play(effect) {
           var _this$effects$get;
-          if (this.canPlay()) (_this$effects$get = this.effects.get(effect)) == null || _this$effects$get.play();
+          if (this.enabled) (_this$effects$get = this.effects.get(effect)) == null || _this$effects$get.play();
+        };
+        _proto.playItemTap = function playItemTap(kind) {
+          this.play(ITEM_TAP_EFFECT[kind]);
         };
         _proto.applyAmbience = function applyAmbience() {
           var _this$environment$get;
@@ -102,24 +162,17 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
           if (this.ambience.clip === clip) return;
           if (this.ambience.clip) this.ambience.stop();
           this.ambience.clip = clip;
-          this.ambience.volume = AMBIENCE_VOLUME[this.weather];
-          if (clip && this.canPlay()) this.ambience.play();
-        };
-        _proto.resumeLoops = function resumeLoops() {
-          if (this.music.clip) this.music.play();
-          if (this.ambience.clip) this.ambience.play();
-        };
-        _proto.canPlay = function canPlay() {
-          return this.enabled && this.receivedGesture;
+          this.ambience.volume = this.enabled ? AMBIENCE_VOLUME[this.weather] : 0;
+          if (clip && this.enabled) this.ambience.play();
         };
         _proto.loadClip = function loadClip(name, ready) {
-          var _this2 = this;
+          var _this3 = this;
           resources.load("audio/storybook/" + name, AudioClip, function (error, clip) {
             if (error) {
               console.warn("Could not load Daily Tidy audio: " + name, error);
               return;
             }
-            if (_this2.node.isValid) ready(clip);
+            if (_this3.node.isValid) ready(clip);
           });
         };
         _proto.createSource = function createSource(name, volume, loop) {
@@ -139,7 +192,7 @@ System.register("chunks:///_virtual/DailyTidyAudio.ts", ['./rollupPluginModLoBab
 });
 
 System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabelHelpers.js', 'cc', './LevelData.ts', './DailyTidyAudio.ts', './DailyTidyWeather.ts'], function (exports) {
-  var _inheritsLoose, _createForOfIteratorHelperLoose, _extends, _asyncToGenerator, _regeneratorRuntime, cclegacy, _decorator, Color, view, ResolutionPolicy, Camera, Layers, profiler, Node, UITransform, Mask, Sprite, Graphics, Vec3, Tween, tween, BlockInputEvents, Vec2, Label, Component, resources, SpriteFrame, LEVELS, ITEM_CATEGORY, CATEGORY_NAME, DailyTidyAudio, DailyTidyWeather, WEATHER_STATES, WEATHER_LIGHT, WEATHER_LABEL;
+  var _inheritsLoose, _createForOfIteratorHelperLoose, _extends, _asyncToGenerator, _regeneratorRuntime, cclegacy, _decorator, Color, view, Camera, Layers, profiler, screen, ResolutionPolicy, Widget, UITransform, BlockInputEvents, Graphics, Mask, Node, Sprite, Vec3, Tween, tween, UIOpacity, Vec2, Label, Component, resources, SpriteFrame, LEVELS, emptyCategoryCounts, ITEM_CATEGORY, CATEGORY_NAME, DailyTidyAudio, ROOM_WINDOWS, DailyTidyWeather, WEATHER_STATES, WEATHER_LIGHT, WEATHER_LABEL;
   return {
     setters: [function (module) {
       _inheritsLoose = module.inheritsLoose;
@@ -152,19 +205,22 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
       _decorator = module._decorator;
       Color = module.Color;
       view = module.view;
-      ResolutionPolicy = module.ResolutionPolicy;
       Camera = module.Camera;
       Layers = module.Layers;
       profiler = module.profiler;
-      Node = module.Node;
+      screen = module.screen;
+      ResolutionPolicy = module.ResolutionPolicy;
+      Widget = module.Widget;
       UITransform = module.UITransform;
-      Mask = module.Mask;
-      Sprite = module.Sprite;
+      BlockInputEvents = module.BlockInputEvents;
       Graphics = module.Graphics;
+      Mask = module.Mask;
+      Node = module.Node;
+      Sprite = module.Sprite;
       Vec3 = module.Vec3;
       Tween = module.Tween;
       tween = module.tween;
-      BlockInputEvents = module.BlockInputEvents;
+      UIOpacity = module.UIOpacity;
       Vec2 = module.Vec2;
       Label = module.Label;
       Component = module.Component;
@@ -172,11 +228,13 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
       SpriteFrame = module.SpriteFrame;
     }, function (module) {
       LEVELS = module.LEVELS;
+      emptyCategoryCounts = module.emptyCategoryCounts;
       ITEM_CATEGORY = module.ITEM_CATEGORY;
       CATEGORY_NAME = module.CATEGORY_NAME;
     }, function (module) {
       DailyTidyAudio = module.DailyTidyAudio;
     }, function (module) {
+      ROOM_WINDOWS = module.ROOM_WINDOWS;
       DailyTidyWeather = module.DailyTidyWeather;
       WEATHER_STATES = module.WEATHER_STATES;
       WEATHER_LIGHT = module.WEATHER_LIGHT;
@@ -188,14 +246,43 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
       var ccclass = _decorator.ccclass;
       var W = 720;
       var H = 1280;
-      var ROOM_TOP = 380;
+      var ROOM_TOP = 317;
+      var STAGING_Y = 356;
       var ROOM_BOTTOM = -H / 2;
-      var ROOM_VIEW_Y = (ROOM_TOP + ROOM_BOTTOM) / 2;
       var ROOM_VIEW_H = ROOM_TOP - ROOM_BOTTOM;
-      var ROOM_START_INSET = 78;
       var PROGRESS_WIDTH = 438;
-      var ROOM_ASSET = 'attic';
+      var HEADER_COLOR = new Color('#F7E8D4');
+      var HEADER_EDGE = new Color('#D3B394');
       var UI_ASSETS = ['logo', 'restart', 'find', 'track', 'bin_toys', 'bin_books', 'bin_clothes', 'bin_sports', 'bin_empty'];
+      var BIN_ART = {
+        toys: 'bin_toys',
+        books: 'bin_books',
+        clothes: 'bin_clothes',
+        sports: 'bin_sports',
+        linens: 'bin_books',
+        crafts: 'bin_toys',
+        tools: 'bin_sports',
+        mail: 'bin_clothes',
+        papers: 'bin_books',
+        snacks: 'bin_clothes',
+        picnic: 'bin_toys'
+      };
+      var BIN_ICON_ITEMS = {
+        linens: 'towel',
+        crafts: 'yarn',
+        tools: 'tape',
+        mail: 'envelope',
+        papers: 'folder',
+        snacks: 'apple',
+        picnic: 'flask'
+      };
+      var FLAT_ITEMS = new Set(['blue_book', 'red_book', 'green_book', 'shirt', 'pajamas', 'towel', 'disc', 'folder', 'envelope', 'sandwich']);
+      var TIGHT_FOOTPRINT = {
+        center: 0.5,
+        bottom: 0,
+        width: 1,
+        height: 1
+      };
 
       // Visible body and contact point as fractions of each untrimmed sprite.
       var ITEM_FOOTPRINT = {
@@ -274,27 +361,22 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           _this.level = void 0;
           _this.piles = [];
           _this.bins = [];
+          _this.held = [];
+          _this.slots = [];
+          _this.stagingCount = null;
           _this.itemViews = [];
-          _this.remaining = {
-            toys: 0,
-            books: 0,
-            clothes: 0,
-            sports: 0
-          };
-          _this.collected = {
-            toys: 0,
-            books: 0,
-            clothes: 0,
-            sports: 0
-          };
-          _this.total = {
-            toys: 0,
-            books: 0,
-            clothes: 0,
-            sports: 0
-          };
+          _this.remaining = emptyCategoryCounts();
+          _this.collected = emptyCategoryCounts();
+          _this.total = emptyCategoryCounts();
           _this.room = null;
           _this.roomWidth = W;
+          _this.roomCenter = 0;
+          _this.roomViewport = null;
+          _this.roomScale = 1;
+          _this.roomViewportWidth = W;
+          _this.roomHeader = null;
+          _this.footer = null;
+          _this.overlayDim = null;
           _this.roomArt = null;
           _this.weatherView = null;
           _this.weather = 'sunny';
@@ -311,6 +393,8 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           _this.status = null;
           _this.hasShownExploreTip = false;
           _this.busy = false;
+          _this.pendingMoves = 0;
+          _this.swappingBin = null;
           _this.progressText = null;
           _this.progressBar = null;
           _this.shownHint = false;
@@ -319,122 +403,225 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
         var _proto = DailyTidyRoot.prototype;
         _proto.onLoad = function onLoad() {
           var _this$node$getChildBy;
-          // Keep the entire portrait composition visible in wider web previews.
-          view.setDesignResolutionSize(W, H, ResolutionPolicy.SHOW_ALL);
+          this.resizeView();
+          view.on('canvas-resize', this.resizeView, this);
           var camera = (_this$node$getChildBy = this.node.getChildByName('Camera')) == null ? void 0 : _this$node$getChildBy.getComponent(Camera);
           if (camera) {
             camera.near = 1;
             camera.far = 2000;
             camera.visibility = Layers.Enum.UI_2D;
+            camera.clearColor = HEADER_COLOR;
           }
           var backdrop = this.node.getChildByName('RoomBackdrop');
           if (backdrop) backdrop.active = false;
           profiler.hideStats();
         };
         _proto.start = /*#__PURE__*/function () {
-          var _start = _asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee2() {
+          var _start = _asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee() {
             var _this2 = this;
-            var paths;
-            return _regeneratorRuntime().wrap(function _callee2$(_context2) {
-              while (1) switch (_context2.prev = _context2.next) {
+            return _regeneratorRuntime().wrap(function _callee$(_context) {
+              while (1) switch (_context.prev = _context.next) {
                 case 0:
                   profiler.hideStats();
                   this.audio = new DailyTidyAudio(this.makeNode(this.node, 'Daily Tidy audio'));
                   this.audio.load();
-                  this.node.on(Node.EventType.TOUCH_END, this.unlockAudio, this, true);
+                  this.audio.setRoom(LEVELS[0].room);
                   this.showLoading();
-                  paths = [[ROOM_ASSET, "art/storybook/" + ROOM_ASSET]].concat(Object.keys(ITEM_CATEGORY).map(function (name) {
-                    return [name, "art/storybook/items/" + name];
-                  }), UI_ASSETS.map(function (name) {
-                    return [name, "art/storybook/ui/" + name];
-                  }));
-                  _context2.prev = 6;
-                  _context2.next = 9;
-                  return Promise.all(paths.map( /*#__PURE__*/_asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee(_ref) {
-                    var name, path, frame;
-                    return _regeneratorRuntime().wrap(function _callee$(_context) {
-                      while (1) switch (_context.prev = _context.next) {
-                        case 0:
-                          name = _ref[0], path = _ref[1];
-                          _context.next = 3;
-                          return new Promise(function (resolve, reject) {
-                            resources.load(path + "/spriteFrame", SpriteFrame, function (error, asset) {
-                              return error ? reject(error) : resolve(asset);
-                            });
-                          });
-                        case 3:
-                          frame = _context.sent;
-                          _this2.frames.set(name, frame);
-                        case 5:
-                        case "end":
-                          return _context.stop();
-                      }
-                    }, _callee);
-                  }))));
-                case 9:
+                  _context.prev = 5;
+                  _context.next = 8;
+                  return Promise.all([this.loadLevelArt(0)].concat(UI_ASSETS.map(function (name) {
+                    return _this2.loadFrame(name, "ui/" + name);
+                  })));
+                case 8:
+                  if (this.node.isValid) {
+                    _context.next = 10;
+                    break;
+                  }
+                  return _context.abrupt("return");
+                case 10:
                   this.loadLevel(0);
-                  _context2.next = 17;
+                  _context.next = 20;
                   break;
-                case 12:
-                  _context2.prev = 12;
-                  _context2.t0 = _context2["catch"](6);
+                case 13:
+                  _context.prev = 13;
+                  _context.t0 = _context["catch"](5);
+                  if (this.node.isValid) {
+                    _context.next = 17;
+                    break;
+                  }
+                  return _context.abrupt("return");
+                case 17:
                   this.clearDynamicNodes();
                   this.makeLabel(this.node, 'Could not load art. Open the project in Cocos Creator first.', 0, 0, 540, 60, 28, INK);
-                  console.error(_context2.t0);
-                case 17:
+                  console.error(_context.t0);
+                case 20:
                 case "end":
-                  return _context2.stop();
+                  return _context.stop();
               }
-            }, _callee2, this, [[6, 12]]);
+            }, _callee, this, [[5, 13]]);
           }));
           function start() {
             return _start.apply(this, arguments);
           }
           return start;
         }();
+        _proto.loadFrame = /*#__PURE__*/function () {
+          var _loadFrame = _asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee2(name, path) {
+            var frame;
+            return _regeneratorRuntime().wrap(function _callee2$(_context2) {
+              while (1) switch (_context2.prev = _context2.next) {
+                case 0:
+                  if (!this.frames.has(name)) {
+                    _context2.next = 2;
+                    break;
+                  }
+                  return _context2.abrupt("return");
+                case 2:
+                  _context2.next = 4;
+                  return new Promise(function (resolve, reject) {
+                    resources.load("art/storybook/" + path + "/spriteFrame", SpriteFrame, function (error, asset) {
+                      return error ? reject(error) : resolve(asset);
+                    });
+                  });
+                case 4:
+                  frame = _context2.sent;
+                  this.frames.set(name, frame);
+                case 6:
+                case "end":
+                  return _context2.stop();
+              }
+            }, _callee2, this);
+          }));
+          function loadFrame(_x, _x2) {
+            return _loadFrame.apply(this, arguments);
+          }
+          return loadFrame;
+        }();
+        _proto.loadLevelArt = /*#__PURE__*/function () {
+          var _loadLevelArt = _asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee3(index) {
+            var _this3 = this;
+            var level, items, _iterator, _step, stack, _iterator3, _step3, item, _iterator2, _step2, category, icon;
+            return _regeneratorRuntime().wrap(function _callee3$(_context3) {
+              while (1) switch (_context3.prev = _context3.next) {
+                case 0:
+                  level = LEVELS[index];
+                  items = new Set();
+                  for (_iterator = _createForOfIteratorHelperLoose(level.piles); !(_step = _iterator()).done;) {
+                    stack = _step.value.items;
+                    for (_iterator3 = _createForOfIteratorHelperLoose(stack); !(_step3 = _iterator3()).done;) {
+                      item = _step3.value;
+                      items.add(item);
+                    }
+                  }
+                  for (_iterator2 = _createForOfIteratorHelperLoose(level.categories); !(_step2 = _iterator2()).done;) {
+                    category = _step2.value;
+                    icon = BIN_ICON_ITEMS[category];
+                    if (icon) items.add(icon);
+                  }
+                  _context3.next = 6;
+                  return Promise.all([this.loadFrame(level.room, level.room)].concat(Array.from(items, function (name) {
+                    return _this3.loadFrame(name, "items/" + name);
+                  })));
+                case 6:
+                case "end":
+                  return _context3.stop();
+              }
+            }, _callee3, this);
+          }));
+          function loadLevelArt(_x3) {
+            return _loadLevelArt.apply(this, arguments);
+          }
+          return loadLevelArt;
+        }();
         _proto.update = function update(dt) {
           this.advanceRoom(dt);
           if (!this.weatherView || !this.room) return;
           var window = this.weatherView.node;
-          var left = window.position.x + this.room.position.x;
-          if (left < W / 2 && left + 806 * window.scale.x > -W / 2) this.weatherView.update(dt);
+          var halfWidth = this.roomViewportWidth / (2 * this.roomScale);
+          var windowLeft = window.position.x + this.room.position.x / this.roomScale;
+          var windowRight = windowLeft + this.weatherView.width * window.scale.x;
+          if (windowLeft < halfWidth && windowRight > -halfWidth) this.weatherView.update(dt);
         };
         _proto.onDestroy = function onDestroy() {
-          this.node.off(Node.EventType.TOUCH_END, this.unlockAudio, this, true);
+          view.off('canvas-resize', this.resizeView, this);
         };
-        _proto.unlockAudio = function unlockAudio() {
-          var _this$audio;
-          (_this$audio = this.audio) == null || _this$audio.unlock();
-          this.node.off(Node.EventType.TOUCH_END, this.unlockAudio, this, true);
+        _proto.resizeView = function resizeView() {
+          var _this$node$getCompone;
+          var _screen$windowSize = screen.windowSize,
+            width = _screen$windowSize.width,
+            height = _screen$windowSize.height;
+          if (width <= 0 || height <= 0) return;
+          var policy = width * H >= height * W ? ResolutionPolicy.FIXED_HEIGHT : ResolutionPolicy.FIXED_WIDTH;
+          view.setDesignResolutionSize(W, H, policy);
+          (_this$node$getCompone = this.node.getComponent(Widget)) == null || _this$node$getCompone.updateAlignment();
+          this.layoutRoom();
+          this.resizeOverlay();
+        };
+        _proto.layoutRoom = function layoutRoom() {
+          var _this$footer;
+          if (!this.roomViewport || !this.room || !this.roomHeader) return;
+          var _view$getVisibleSize = view.getVisibleSize(),
+            width = _view$getVisibleSize.width,
+            height = _view$getVisibleSize.height;
+          var roomHeight = ROOM_TOP + height / 2;
+          var oldTravel = this.roomWidth * this.roomScale - this.roomViewportWidth;
+          var fraction = oldTravel > 0 ? this.room.position.x / oldTravel : 0;
+          this.roomScale = roomHeight / ROOM_VIEW_H;
+          this.roomViewportWidth = Math.min(width, this.roomWidth * this.roomScale);
+          this.roomViewport.setPosition(0, ROOM_TOP - roomHeight / 2);
+          this.roomViewport.getComponent(UITransform).setContentSize(this.roomViewportWidth, roomHeight);
+          this.room.setScale(this.roomScale, this.roomScale, 1);
+          this.panRoom(fraction * (this.roomWidth * this.roomScale - this.roomViewportWidth));
+          var header = this.roomHeader;
+          header.clear();
+          header.fillColor = HEADER_COLOR;
+          header.rect(-width / 2, ROOM_TOP, width, height / 2 - ROOM_TOP);
+          header.fill();
+          header.fillColor = HEADER_EDGE;
+          header.rect(-width / 2, ROOM_TOP - 2, width, 4);
+          header.fill();
+          (_this$footer = this.footer) == null || _this$footer.setPosition(0, (H - height) / 2);
+        };
+        _proto.resizeOverlay = function resizeOverlay() {
+          if (!this.overlay || !this.overlayDim) return;
+          var _view$getVisibleSize2 = view.getVisibleSize(),
+            width = _view$getVisibleSize2.width,
+            height = _view$getVisibleSize2.height;
+          this.overlay.getComponent(UITransform).setContentSize(width, height);
+          this.overlayDim.clear();
+          this.overlayDim.fillColor = new Color(44, 36, 30, 162);
+          this.overlayDim.rect(-width / 2, -height / 2, width, height);
+          this.overlayDim.fill();
+        };
+        _proto.openOverlay = function openOverlay(name) {
+          var overlay = this.makeNode(this.node, name);
+          overlay.addComponent(UITransform);
+          overlay.addComponent(BlockInputEvents);
+          this.overlay = overlay;
+          this.overlayDim = this.makeNode(overlay, 'Dim').addComponent(Graphics);
+          this.resizeOverlay();
+          return overlay;
         };
         _proto.showLoading = function showLoading() {
           this.clearDynamicNodes();
-          this.makePanel(this.node, 'Loading', 0, 0, W, H, new Color('#F6EFE2'), 0);
-          this.makeLabel(this.node, 'Preparing your room…', 0, 0, 500, 60, 30, INK);
+          this.makeLabel(this.node, 'Getting things ready…', 0, 0, 500, 60, 30, INK);
         };
         _proto.loadLevel = function loadLevel(index) {
+          var _this$audio;
           this.levelIndex = index % LEVELS.length;
           this.level = LEVELS[this.levelIndex];
+          (_this$audio = this.audio) == null || _this$audio.setRoom(this.level.room);
+          this.held = Array(this.level.stagingCapacity).fill(null);
           this.piles = this.level.piles.map(function (p) {
             return [].concat(p.items);
           });
-          this.remaining = {
-            toys: 0,
-            books: 0,
-            clothes: 0,
-            sports: 0
-          };
-          this.collected = {
-            toys: 0,
-            books: 0,
-            clothes: 0,
-            sports: 0
-          };
+          this.remaining = emptyCategoryCounts();
+          this.collected = emptyCategoryCounts();
           this.shownHint = false;
-          for (var _iterator = _createForOfIteratorHelperLoose(this.piles), _step; !(_step = _iterator()).done;) {
-            var pile = _step.value;
-            for (var _iterator2 = _createForOfIteratorHelperLoose(pile), _step2; !(_step2 = _iterator2()).done;) {
-              var item = _step2.value;
+          for (var _iterator4 = _createForOfIteratorHelperLoose(this.piles), _step4; !(_step4 = _iterator4()).done;) {
+            var pile = _step4.value;
+            for (var _iterator5 = _createForOfIteratorHelperLoose(pile), _step5; !(_step5 = _iterator5()).done;) {
+              var item = _step5.value;
               this.remaining[ITEM_CATEGORY[item]]++;
             }
           }
@@ -442,7 +629,11 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.roomTouch = null;
           this.roomVelocity = 0;
           this.busy = false;
+          this.pendingMoves = 0;
+          this.swappingBin = null;
           this.overlay = null;
+          this.overlayDim = null;
+          this.footer = null;
           this.clearDynamicNodes();
           this.levelRoot = this.makeNode(this.node, 'Level');
           this.roomPosition = null;
@@ -453,40 +644,47 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.updateProgress();
           if (!this.hasShownExploreTip) {
             this.hasShownExploreTip = true;
-            this.setStatus('Swipe to explore');
+            this.setStatus('Swipe to explore. Unmatched items wait in the tray.');
           }
         };
         _proto.drawRoom = function drawRoom() {
           var viewport = this.makeNode(this.levelRoot, 'Room viewport');
-          viewport.setPosition(0, ROOM_VIEW_Y);
-          viewport.addComponent(UITransform).setContentSize(W, ROOM_VIEW_H);
+          this.roomViewport = viewport;
+          viewport.addComponent(UITransform);
           viewport.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT;
           viewport.on(Node.EventType.TOUCH_START, this.beginRoomTouch, this);
           viewport.on(Node.EventType.TOUCH_MOVE, this.moveRoomTouch, this);
           viewport.on(Node.EventType.TOUCH_END, this.endRoomTouch, this);
           viewport.on(Node.EventType.TOUCH_CANCEL, this.cancelRoomTouch, this);
           this.room = this.makeNode(viewport, 'Scrollable room');
-          var source = this.frames.get(ROOM_ASSET).originalSize;
-          this.roomWidth = ROOM_VIEW_H * source.width / source.height;
-          this.roomArt = this.makeSprite(this.room, ROOM_ASSET, 0, 0, this.roomWidth, ROOM_VIEW_H).getComponent(Sprite);
+          var source = this.frames.get(this.level.room).originalSize;
           var scale = ROOM_VIEW_H / source.height;
-          var weather = this.makeNode(this.room, 'Window weather');
-          weather.setPosition(-this.roomWidth / 2 + 155 * scale, ROOM_VIEW_H / 2 - 80 * scale);
-          weather.setScale(scale / 2, scale / 2, 1);
-          this.weatherView = new DailyTidyWeather(weather);
+          var _this$level$focus = this.level.focus,
+            left = _this$level$focus.left,
+            right = _this$level$focus.right;
+          this.roomCenter = (left + right) / 2;
+          this.roomWidth = (right - left) * scale;
+          var artX = (source.width / 2 - this.roomCenter) * scale;
+          this.roomArt = this.makeSprite(this.room, this.level.room, artX, 0, source.width * scale, ROOM_VIEW_H).getComponent(Sprite);
+          var window = ROOM_WINDOWS[this.level.room];
+          this.weatherView = null;
+          if (window) {
+            var weather = this.makeNode(this.room, 'Window weather');
+            weather.setPosition((window.x - this.roomCenter) * scale, ROOM_VIEW_H / 2 - window.y * scale);
+            weather.setScale(scale / window.density, scale / window.density, 1);
+            this.weatherView = new DailyTidyWeather(weather, window.panes);
+          }
           this.applyWeather();
-          this.panRoom((this.roomWidth - W) / 2 - ROOM_START_INSET);
-          var headerHeight = H / 2 - ROOM_TOP;
-          this.makePanel(this.levelRoot, 'Header', 0, ROOM_TOP + headerHeight / 2, W, headerHeight, new Color('#F7E8D4'), 0);
-          this.makePanel(this.levelRoot, 'Shelf edge', 0, ROOM_TOP, W, 4, new Color('#D3B394'), 0);
+          this.roomHeader = this.makeNode(this.levelRoot, 'Header').addComponent(Graphics);
+          this.layoutRoom();
         };
         _proto.drawHeader = function drawHeader() {
-          var _this3 = this;
+          var _this4 = this;
           this.makeSprite(this.levelRoot, 'logo', -131, 590, 384);
           this.drawWeatherControls();
           var reset = this.makeSprite(this.levelRoot, 'restart', 299, 582, 66);
           reset.on(Node.EventType.TOUCH_END, function () {
-            return _this3.loadLevel(_this3.levelIndex);
+            return _this4.loadLevel(_this4.levelIndex);
           }, this);
           this.makeSprite(this.levelRoot, 'track', 0, 521, 462, 31);
           this.progressBar = this.makeNode(this.levelRoot, 'Progress fill').addComponent(Graphics);
@@ -494,7 +692,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.progressText = this.makeLabel(this.levelRoot, '', 0, 521, 192, 27, 21, INK, true);
         };
         _proto.drawWeatherControls = function drawWeatherControls() {
-          var _this4 = this;
+          var _this5 = this;
           var weather = this.makePanel(this.levelRoot, 'Weather', 136, 583, 125, 53, new Color('#EFE0C9'), 23);
           this.weatherLabel = this.makeLabel(weather, '', 15, 0, 77, 35, 19, INK, true);
           var icon = this.makeNode(weather, 'Weather icon');
@@ -502,20 +700,20 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.weatherIcon = icon.addComponent(Graphics);
           this.updateWeatherControl();
           weather.on(Node.EventType.TOUCH_END, function () {
-            var index = WEATHER_STATES.indexOf(_this4.weather);
-            _this4.weather = WEATHER_STATES[(index + 1) % WEATHER_STATES.length];
-            _this4.applyWeather();
-            _this4.updateWeatherControl();
+            var index = WEATHER_STATES.indexOf(_this5.weather);
+            _this5.weather = WEATHER_STATES[(index + 1) % WEATHER_STATES.length];
+            _this5.applyWeather();
+            _this5.updateWeatherControl();
           }, this);
           var audio = this.makePanel(this.levelRoot, 'Audio toggle', 228, 583, 49, 53, new Color('#EFE0C9'), 23);
           this.soundIcon = this.makeNode(audio, 'Speaker icon').addComponent(Graphics);
           this.updateSoundControl();
           audio.on(Node.EventType.TOUCH_END, function () {
-            var _this4$audio;
-            _this4.soundEnabled = !_this4.soundEnabled;
-            (_this4$audio = _this4.audio) == null || _this4$audio.setEnabled(_this4.soundEnabled);
-            _this4.updateSoundControl();
-            _this4.setStatus(_this4.soundEnabled ? 'Sound on' : 'Sound off');
+            var _this5$audio;
+            _this5.soundEnabled = !_this5.soundEnabled;
+            (_this5$audio = _this5.audio) == null || _this5$audio.setEnabled(_this5.soundEnabled);
+            _this5.updateSoundControl();
+            _this5.setStatus(_this5.soundEnabled ? 'Sound on' : 'Sound off');
           }, this);
         };
         _proto.applyWeather = function applyWeather() {
@@ -551,13 +749,13 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           } else {
             for (var _i2 = 0; _i2 < 6; _i2++) {
               var _a = _i2 * Math.PI / 3;
-              var _x2 = Math.cos(_a);
+              var _x4 = Math.cos(_a);
               var y = Math.sin(_a);
               icon.moveTo(0, 0);
-              icon.lineTo(12 * _x2, 12 * y);
-              icon.moveTo(7 * _x2 + 3 * y, 7 * y - 3 * _x2);
-              icon.lineTo(9 * _x2, 9 * y);
-              icon.lineTo(7 * _x2 - 3 * y, 7 * y + 3 * _x2);
+              icon.lineTo(12 * _x4, 12 * y);
+              icon.moveTo(7 * _x4 + 3 * y, 7 * y - 3 * _x4);
+              icon.lineTo(9 * _x4, 9 * y);
+              icon.lineTo(7 * _x4 - 3 * y, 7 * y + 3 * _x4);
             }
           }
           icon.stroke();
@@ -588,45 +786,49 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           icon.stroke();
         };
         _proto.drawPiles = function drawPiles() {
-          var _this5 = this;
+          var _this6 = this;
           this.itemViews = [];
-          var roomSize = this.frames.get(ROOM_ASSET).originalSize;
+          var roomSize = this.frames.get(this.level.room).originalSize;
           var artScale = ROOM_VIEW_H / roomSize.height;
           var order = Array.from(this.level.piles.keys()).sort(function (a, b) {
-            return _this5.level.piles[a].y - _this5.level.piles[b].y;
+            return _this6.level.piles[a].y - _this6.level.piles[b].y;
           });
           var _loop = function _loop() {
-            var pileIndex = _step3.value;
-            var pile = _this5.level.piles[pileIndex];
+            var pileIndex = _step6.value;
+            var pile = _this6.level.piles[pileIndex];
             var baseWidth = pile.width * artScale;
-            var baseX = (pile.x - roomSize.width / 2) * artScale;
+            var baseX = (pile.x - _this6.roomCenter) * artScale;
             var contactY = (roomSize.height / 2 - pile.y) * artScale;
-            _this5.piles[pileIndex].forEach(function (kind, index) {
-              var _pile$angle, _pile$stackOffset;
-              var widthRatio = index === 0 ? 1 : 0.79;
+            _this6.piles[pileIndex].forEach(function (kind, index) {
+              var _index, _pile$stackOffset, _index2, _pile$angle, _index3, _ITEM_FOOTPRINT$kind;
+              var widthRatio = (_index = [1, 0.94, 0.86, 0.81][index]) != null ? _index : 0.76;
               var visibleWidth = baseWidth * widthRatio * (kind === 'ball' ? 0.76 : 1);
-              var contactShadow = index === 0 ? _this5.drawContactShadow(baseX, contactY, visibleWidth) : undefined;
-              var n = _this5.makeNode(_this5.room, kind + "-" + pileIndex + "-" + index);
+              var direction = ((_pile$stackOffset = pile.stackOffset) != null ? _pile$stackOffset : 0.2) < 0 ? -1 : 1;
+              var offset = direction * baseWidth * ((_index2 = [0, 0.19, -0.13, 0.27][index]) != null ? _index2 : -0.22);
+              var contactShadow = _this6.drawContactShadow(baseX + offset, contactY, visibleWidth, index > 0);
+              var n = _this6.makeNode(_this6.room, kind + "-" + pileIndex + "-" + index);
               var angle = (_pile$angle = pile.angle) != null ? _pile$angle : 0;
-              var offset = index === 0 ? 0 : baseWidth * ((_pile$stackOffset = pile.stackOffset) != null ? _pile$stackOffset : 0);
-              n.angle = index === 0 ? angle : angle * 0.45;
+              var restAngle = (_index3 = [0, 7, -9, 5][index]) != null ? _index3 : -6;
+              var rotation = FLAT_ITEMS.has(kind) ? restAngle : restAngle * 0.55;
+              n.angle = angle + rotation * direction;
               var trans = n.addComponent(UITransform);
               var sprite = n.addComponent(Sprite);
               sprite.sizeMode = Sprite.SizeMode.CUSTOM;
               sprite.trim = false;
-              var frame = _this5.frames.get(kind);
+              var frame = _this6.frames.get(kind);
               sprite.spriteFrame = frame;
               var source = frame.originalSize;
-              var footprint = ITEM_FOOTPRINT[kind];
+              var footprint = (_ITEM_FOOTPRINT$kind = ITEM_FOOTPRINT[kind]) != null ? _ITEM_FOOTPRINT$kind : TIGHT_FOOTPRINT;
               var width = visibleWidth / footprint.width;
-              var height = width * source.height / source.width;
+              var foreshortening = FLAT_ITEMS.has(kind) ? pile.y < 400 ? 0.79 : 0.90 : 1;
+              var height = width * source.height / source.width * foreshortening;
               var visibleHeight = height * footprint.height;
               var ball = kind === 'ball';
               trans.setContentSize(width, height);
               // A ball rotates around its center while its contact point stays on the floor.
               trans.setAnchorPoint(footprint.center, footprint.bottom + (ball ? footprint.height / 2 : 0));
               n.setPosition(baseX + offset, contactY + (ball ? visibleHeight / 2 : 0));
-              _this5.itemViews.push({
+              _this6.itemViews.push({
                 node: n,
                 kind: kind,
                 pile: pileIndex,
@@ -639,43 +841,48 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
                 contactShadow: contactShadow
               });
 
-              // The contact is on the top face of the book or folded shirt below.
-              contactY += visibleHeight * 0.43;
+              // Upper items overlap the front silhouette instead of sitting edge to edge.
+              contactY += Math.min(visibleHeight * (FLAT_ITEMS.has(kind) ? 0.36 : 0.24), baseWidth * 0.18);
             });
           };
-          for (var _iterator3 = _createForOfIteratorHelperLoose(order), _step3; !(_step3 = _iterator3()).done;) {
+          for (var _iterator6 = _createForOfIteratorHelperLoose(order), _step6; !(_step6 = _iterator6()).done;) {
             _loop();
           }
         };
-        _proto.drawContactShadow = function drawContactShadow(x, y, width) {
+        _proto.drawContactShadow = function drawContactShadow(x, y, width, upper) {
           var shadow = this.makeNode(this.room, 'Contact shadow');
           shadow.setPosition(x, y + width * 0.035);
           var graphics = shadow.addComponent(Graphics);
-          graphics.fillColor = new Color(65, 37, 17, 32);
+          graphics.fillColor = new Color(65, 37, 17, upper ? 27 : 42);
           graphics.ellipse(0, 0, width * 0.45, width * 0.09);
           graphics.fill();
-          graphics.fillColor = new Color(65, 37, 17, 36);
+          graphics.fillColor = new Color(65, 37, 17, upper ? 18 : 33);
           graphics.ellipse(0, 0, width * 0.32, width * 0.06);
           graphics.fill();
           return shadow;
         };
         _proto.drawBins = function drawBins() {
-          var _this6 = this;
+          var _this$level$visibleBo,
+            _this7 = this;
           this.bins = [];
-          var message = this.makePanel(this.levelRoot, 'Room message', -131, -580, 394, 44, new Color(250, 237, 218, 238), 20);
+          var footer = this.makeNode(this.levelRoot, 'Footer');
+          this.footer = footer;
+          footer.setPosition(0, (H - view.getVisibleSize().height) / 2);
+          var message = this.makePanel(footer, 'Room message', -131, -580, 394, 44, new Color(250, 237, 218, 238), 20);
           this.status = this.makeLabel(message, '', 0, 0, 372, 33, 19, INK, true);
           message.active = false;
-          this.roomPosition = this.makeNode(this.levelRoot, 'Room position').addComponent(Graphics);
+          this.roomPosition = this.makeNode(footer, 'Room position').addComponent(Graphics);
           this.roomPosition.node.setPosition(-35, -616);
           this.updateRoomPosition();
-          var count = this.level.active.length;
+          var categories = this.level.categories.slice(0, (_this$level$visibleBo = this.level.visibleBoxes) != null ? _this$level$visibleBo : 3);
+          var count = categories.length;
           var width = count === 2 ? 252 : 222;
           var gap = 11;
-          this.level.active.forEach(function (category, i) {
+          categories.forEach(function (category, i) {
             var x = (i - (count - 1) / 2) * (width + gap);
             var bin = {
               category: category,
-              node: _this6.makeNode(_this6.levelRoot, 'Bin'),
+              node: _this7.makeNode(_this7.levelRoot, 'Bin'),
               x: x,
               y: 444,
               width: width,
@@ -683,10 +890,11 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
               highlight: null
             };
             bin.node.setPosition(x, bin.y);
-            _this6.bins.push(bin);
-            _this6.renderBin(bin);
+            _this7.bins.push(bin);
+            _this7.renderBin(bin);
           });
-          var hint = this.makeSprite(this.levelRoot, 'find', 222, -595, 236, 64);
+          this.drawStagingTray();
+          var hint = this.makeSprite(footer, 'find', 222, -595, 236, 64);
           var lens = this.makeNode(hint, 'Magnifier');
           lens.setPosition(-77, 1);
           var icon = lens.addComponent(Graphics);
@@ -700,10 +908,34 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           this.makeLabel(hint, 'Find an Item', 15, 1, 164, 35, 22, INK, true);
           hint.on(Node.EventType.TOUCH_END, this.showHint, this);
         };
+        _proto.drawStagingTray = function drawStagingTray() {
+          var _this8 = this;
+          var capacity = this.held.length;
+          var step = 59;
+          var labelWidth = 150;
+          var width = labelWidth + step * capacity + 20;
+          var tray = this.makePanel(this.levelRoot, 'Holding tray', 0, STAGING_Y, width, 63, new Color('#D0AD88'), 14);
+          this.makePanel(tray, 'Tray liner', 0, 2, width - 5, 56, new Color('#EDDDC0'), 12);
+          var labelX = -width / 2 + labelWidth / 2 + 4;
+          this.makeLabel(tray, 'HOLDING TRAY', labelX, 10, labelWidth, 24, 17, INK, true);
+          this.stagingCount = this.makeLabel(tray, '', labelX, -12, labelWidth, 22, 17, INK);
+          this.slots = this.held.map(function (_, i) {
+            var x = -width / 2 + labelWidth + (i + 0.5) * step;
+            var slot = _this8.makePanel(tray, "Holding slot " + (i + 1), x, 2, 51, 46, new Color('#C6AA83'), 9);
+            _this8.makePanel(slot, 'Recess', 0, -1, 46, 40, new Color('#FAEED9'), 7);
+            return slot;
+          });
+          this.updateStagingCount();
+        };
+        _proto.updateStagingCount = function updateStagingCount() {
+          if (!this.stagingCount) return;
+          var used = this.held.filter(Boolean).length;
+          this.stagingCount.string = used + " / " + this.held.length;
+          this.stagingCount.color = used === this.held.length ? new Color('#8B3E25') : INK;
+        };
         _proto.renderBin = function renderBin(bin) {
-          var _bin$category;
           bin.node.destroyAllChildren();
-          this.makeSprite(bin.node, "bin_" + ((_bin$category = bin.category) != null ? _bin$category : 'empty'), 0, 0, bin.width, bin.height);
+          this.makeSprite(bin.node, bin.category ? BIN_ART[bin.category] : 'bin_empty', 0, 0, bin.width, bin.height);
           if (!bin.category) {
             this.makeLabel(bin.node, 'All tidied', 0, -2, bin.width - 32, 39, 24, INK, true);
           } else {
@@ -721,6 +953,12 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           bin.highlight.active = false;
         };
         _proto.drawCategoryIcon = function drawCategoryIcon(parent, category, x, y) {
+          var example = BIN_ICON_ITEMS[category];
+          if (example) {
+            var source = this.frames.get(example).originalSize;
+            this.makeSprite(parent, example, x, y, Math.min(37, 33 * source.width / source.height));
+            return;
+          }
           var node = this.makeNode(parent, category + " icon");
           node.setPosition(x, y);
           var icon = node.addComponent(Graphics);
@@ -826,7 +1064,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             }
             return;
           }
-          if (Math.abs(point.x) > W / 2 || Math.abs(point.y - ROOM_VIEW_Y) > ROOM_VIEW_H / 2) return;
+          if (Math.abs(point.x) > this.roomViewportWidth / 2 || point.y > ROOM_TOP || point.y < -view.getVisibleSize().height / 2) return;
           var item = this.itemAt(e);
           if (item) this.collectItem(item);
         };
@@ -842,7 +1080,7 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           if (this.panRoom(target) !== target) this.roomVelocity = 0;
         };
         _proto.panRoom = function panRoom(x) {
-          var limitX = (this.roomWidth - W) / 2;
+          var limitX = Math.max(0, (this.roomWidth * this.roomScale - this.roomViewportWidth) / 2);
           var position = Math.max(-limitX, Math.min(limitX, x));
           this.room.setPosition(position, 0);
           this.updateRoomPosition();
@@ -850,10 +1088,11 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
         };
         _proto.updateRoomPosition = function updateRoomPosition() {
           if (!this.roomPosition) return;
-          var travel = this.roomWidth - W;
-          var fraction = 0.5 - this.room.position.x / travel;
+          var travel = this.roomWidth * this.roomScale - this.roomViewportWidth;
           var graphics = this.roomPosition;
           graphics.clear();
+          if (travel < 1) return;
+          var fraction = 0.5 - this.room.position.x / travel;
           graphics.fillColor = new Color(72, 43, 26, 115);
           graphics.roundRect(-58, -3, 116, 6, 3);
           graphics.fill();
@@ -880,86 +1119,227 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           return null;
         };
         _proto.collectItem = function collectItem(view) {
-          var _view$contactShadow,
-            _this7 = this;
+          var _this$audio3;
+          if (this.busy || this.overlay) return;
           if (view.index !== this.piles[view.pile].length - 1) {
             this.wiggleBlockedItem(view);
             return;
           }
+          (_this$audio3 = this.audio) == null || _this$audio3.playItemTap(view.kind);
           var category = ITEM_CATEGORY[view.kind];
           var bin = this.bins.find(function (b) {
             return b.category === category;
           });
-          if (!bin) {
-            this.returnFromTrays(view);
+          if (bin && bin === this.swappingBin) return;
+          if (bin) {
+            var _view$contactShadow;
+            (_view$contactShadow = view.contactShadow) == null || _view$contactShadow.destroy();
+            this.removePileItem(view);
+            this.dropIntoBin(view.node, bin, category);
             return;
           }
+          var free = this.held.indexOf(null);
+          if (free >= 0) this.parkItem(view, free);else this.returnFromTrays(view);
+        };
+        _proto.removePileItem = function removePileItem(item) {
+          var _this9 = this;
+          this.itemViews.splice(this.itemViews.indexOf(item), 1);
+          this.piles[item.pile].pop();
+          var revealed = this.itemViews.find(function (v) {
+            return v.pile === item.pile && v.index === _this9.piles[item.pile].length - 1;
+          });
+          if (revealed) {
+            Tween.stopAllByTarget(revealed.node);
+            revealed.node.setScale(0.96, 0.96);
+            tween(revealed.node).to(0.17, {
+              scale: new Vec3(1.03, 1.03, 1)
+            }).to(0.13, {
+              scale: new Vec3(1, 1, 1)
+            }).start();
+          }
+        };
+        _proto.parkItem = function parkItem(item, index) {
+          var _item$contactShadow,
+            _this$audio4,
+            _this10 = this;
           this.hideStatus();
-          Tween.stopAllByTarget(view.node);
-          (_view$contactShadow = view.contactShadow) == null || _view$contactShadow.destroy();
-          view.node.setParent(this.levelRoot, true);
-          bin.highlight.active = true;
-          this.busy = true;
-          tween(view.node).to(0.2, {
-            position: new Vec3(bin.x, bin.y + 6, 0),
-            scale: new Vec3(0.2, 0.2, 1)
+          this.pendingMoves++;
+          var node = item.node;
+          var slot = this.slots[index];
+          var size = this.frames.get(item.kind).originalSize;
+          var width = Math.min(40, 37 * size.width / size.height);
+          var preview = this.makeSprite(slot, item.kind, 0, 0, width);
+          preview.active = false;
+          this.held[index] = {
+            kind: item.kind,
+            node: preview
+          };
+          this.updateStagingCount();
+          this.removePileItem(item);
+          Tween.stopAllByTarget(node);
+          (_item$contactShadow = item.contactShadow) == null || _item$contactShadow.destroy();
+          node.setParent(this.levelRoot, true);
+          var target = new Vec3(slot.position.x, STAGING_Y - 5, 0);
+          var worldScale = Math.min(1, 38 / Math.max(item.visibleWidth, item.visibleHeight));
+          if (item.kind === 'ball') (_this$audio4 = this.audio) == null || _this$audio4.play('ball_air');
+          tween(node).to(0.39, {
+            position: target,
+            angle: 0,
+            scale: new Vec3(worldScale, worldScale, 1)
+          }, {
+            easing: 'cubicOut'
           }).call(function () {
-            var _this7$audio;
-            _this7.itemViews.splice(_this7.itemViews.indexOf(view), 1);
-            view.node.destroy();
-            _this7.piles[view.pile].pop();
-            _this7.remaining[category]--;
-            _this7.collected[category]++;
-            _this7.renderBin(bin);
-            _this7.updateProgress();
-            _this7.collectFeedback(bin);
-            (_this7$audio = _this7.audio) == null || _this7$audio.play('collect');
-            var revealed = _this7.itemViews.find(function (v) {
-              return v.pile === view.pile && v.index === _this7.piles[view.pile].length - 1 && v.node.isValid;
-            });
-            if (revealed) {
-              Tween.stopAllByTarget(revealed.node);
-              revealed.node.setScale(0.93, 0.93);
-              tween(revealed.node).to(0.17, {
-                scale: new Vec3(1.06, 1.06, 1)
-              }).to(0.13, {
-                scale: new Vec3(1, 1, 1)
-              }).start();
-            }
-            if (_this7.allClear()) {
-              _this7.busy = false;
-              _this7.showWin();
-              return;
-            }
-            if (_this7.remaining[category] === 0) {
-              _this7.finishBin(bin);
-            } else {
-              _this7.busy = false;
-            }
+            var _this10$audio;
+            node.destroy();
+            preview.active = true;
+            _this10.pendingMoves--;
+            (_this10$audio = _this10.audio) == null || _this10$audio.play(item.kind === 'ball' ? 'ball_land' : 'drop_box');
+            _this10.setStatus(CATEGORY_NAME[ITEM_CATEGORY[item.kind]] + " will sort when its box opens.");
+            _this10.resolveBoard();
           }).start();
         };
-        _proto.wiggleBlockedItem = function wiggleBlockedItem(item) {
-          var _this$audio3,
-            _this8 = this;
+        _proto.dropIntoBin = function dropIntoBin(node, bin, category) {
+          var _this11 = this;
           this.hideStatus();
-          (_this$audio3 = this.audio) == null || _this$audio3.play('blocked');
+          Tween.stopAllByTarget(node);
+          node.setParent(this.levelRoot, true);
+          var preview = node.getComponent(UITransform);
+          var flightScale = Math.min(0.66, 76 / Math.max(preview.width, preview.height));
+          var start = node.position.clone();
+          var crest = new Vec3(bin.x, bin.y + bin.height / 2 + 49, 0);
+          var opening = new Vec3(bin.x, bin.y + bin.height / 2 - 8, 0);
+          var arc = Math.min(126, 64 + Math.abs(start.x - bin.x) * 0.23);
+          var flightTime = Math.min(0.54, 0.36 + Vec3.distance(start, crest) / 4800);
+          var bank = bin.x < start.x ? 15 : -15;
+          bin.highlight.active = true;
+          this.pendingMoves++;
+          tween(node).to(flightTime, {
+            position: crest,
+            scale: new Vec3(flightScale, flightScale, 1),
+            angle: bank
+          }, {
+            easing: 'sineOut',
+            onUpdate: function onUpdate(_target, t) {
+              var position = node.position;
+              var curve = Math.sin(Math.PI * t);
+              node.setPosition(position.x + bank * 1.7 * curve, position.y + arc * curve, position.z);
+            }
+          }).to(0.11, {
+            position: opening,
+            scale: new Vec3(0.47, 0.47, 1),
+            angle: -bank * 0.4
+          }, {
+            easing: 'quadIn'
+          }).call(function () {
+            var _this11$audio;
+            // The box artwork masks the item once it crosses the lip.
+            node.setSiblingIndex(bin.node.getSiblingIndex());
+            _this11.collectFeedback(bin);
+            (_this11$audio = _this11.audio) == null || _this11$audio.play('drop_box');
+          }).to(0.1, {
+            position: new Vec3(bin.x, bin.y + 1, 0),
+            scale: new Vec3(0.12, 0.12, 1),
+            angle: 0
+          }, {
+            easing: 'quadIn'
+          }).call(function () {
+            node.destroy();
+            _this11.pendingMoves--;
+            _this11.remaining[category]--;
+            _this11.collected[category]++;
+            _this11.renderBin(bin);
+            _this11.updateProgress();
+            _this11.resolveBoard();
+          }).start();
+        };
+        _proto.resolveBoard = function resolveBoard() {
+          var _this12 = this;
+          // Flights reserve their destination at tap time. Box changes and results
+          // wait for those reservations to be settled.
+          if (this.pendingMoves || this.swappingBin || this.busy || this.overlay) return;
+          var _loop2 = function _loop2() {
+              var _step7$value = _step7.value,
+                index = _step7$value[0],
+                item = _step7$value[1];
+              if (!item) return 0; // continue
+              var category = ITEM_CATEGORY[item.kind];
+              var bin = _this12.bins.find(function (box) {
+                return box.category === category;
+              });
+              if (!bin) return 0; // continue
+              _this12.held[index] = null;
+              _this12.dropIntoBin(item.node, bin, category);
+            },
+            _ret;
+          for (var _iterator7 = _createForOfIteratorHelperLoose(this.held.entries()), _step7; !(_step7 = _iterator7()).done;) {
+            _ret = _loop2();
+            if (_ret === 0) continue;
+          }
+          if (this.pendingMoves) {
+            this.updateStagingCount();
+            return;
+          }
+          if (this.allClear()) {
+            this.busy = true;
+            tween(this.levelRoot).delay(0.18).call(function () {
+              _this12.busy = false;
+              _this12.showWin();
+            }).start();
+            return;
+          }
+          var full = this.bins.find(function (bin) {
+            return bin.category && _this12.remaining[bin.category] === 0;
+          });
+          if (full) {
+            this.finishBin(full);
+            return;
+          }
+          if (this.held.indexOf(null) === -1 && !this.hasDirectMove()) this.showBlocked();
+        };
+        _proto.hasDirectMove = function hasDirectMove() {
+          var _this13 = this;
+          return this.piles.some(function (pile) {
+            return pile.length > 0 && _this13.bins.some(function (bin) {
+              return bin.category === ITEM_CATEGORY[pile[pile.length - 1]];
+            });
+          });
+        };
+        _proto.showBlocked = function showBlocked() {
+          var _this$audio5,
+            _this14 = this;
+          (_this$audio5 = this.audio) == null || _this$audio5.play('blocked');
+          var overlay = this.openOverlay('No moves left');
+          this.makePanel(overlay, 'Card shadow', 0, -8, 584, 332, new Color('#B7996F'), 30);
+          this.makePanel(overlay, 'Card', 0, 0, 584, 332, new Color('#FFF8EC'), 30);
+          this.makeLabel(overlay, 'NO MOVES LEFT', 0, 92, 520, 65, 35, INK, true);
+          this.makeLabel(overlay, 'The holding tray is full and no exposed item fits an open box.', 0, 24, 480, 66, 23, INK);
+          this.makeLabel(overlay, 'Try saving a slot for an item that covers what you need.', 0, -37, 480, 46, 19, INK);
+          var restart = this.makeSprite(overlay, 'find', 0, -109, 326, 70);
+          this.makeLabel(restart, 'Retry Space', 0, 0, 300, 54, 27, INK, true);
+          restart.on(Node.EventType.TOUCH_END, function () {
+            return _this14.loadLevel(_this14.levelIndex);
+          }, this);
+        };
+        _proto.wiggleBlockedItem = function wiggleBlockedItem(item) {
+          var _this$audio6, _this$audio7;
+          this.hideStatus();
+          (_this$audio6 = this.audio) == null || _this$audio6.playItemTap(item.kind);
+          (_this$audio7 = this.audio) == null || _this$audio7.play('pinned');
           Tween.stopAllByTarget(item.node);
           item.node.setPosition(item.home);
           item.node.setScale(1, 1);
-          this.busy = true;
           tween(item.node).to(0.06, {
             angle: item.homeAngle - 6
           }).to(0.08, {
             angle: item.homeAngle + 5
           }).to(0.08, {
             angle: item.homeAngle
-          }).call(function () {
-            _this8.busy = false;
           }).start();
         };
         _proto.returnFromTrays = function returnFromTrays(item) {
-          var _this9 = this;
-          this.hideStatus();
+          var _this$audio8,
+            _this15 = this;
+          this.setStatus('Tray full. Look for an item that fits an open box.');
           var node = item.node;
           Tween.stopAllByTarget(node);
           node.setPosition(item.home);
@@ -969,26 +1349,28 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           var sibling = node.getSiblingIndex();
           node.setParent(this.levelRoot, true);
           var landing = node.position.clone();
+          var landingScale = node.scale.clone();
           var tray = this.bins.reduce(function (nearest, bin) {
             return Math.abs(bin.x - landing.x) < Math.abs(nearest.x - landing.x) ? bin : nearest;
           });
           this.busy = true;
+          if (item.kind === 'ball') (_this$audio8 = this.audio) == null || _this$audio8.play('ball_air');
           tween(node).to(0.29, {
             position: new Vec3(tray.x, ROOM_TOP - 12, 0),
-            scale: new Vec3(0.82, 0.82, 1),
+            scale: new Vec3(0.82 * landingScale.x, 0.82 * landingScale.y, 1),
             angle: item.homeAngle - 8
           }, {
             easing: 'cubicOut'
           }).call(function () {
-            var _this9$audio;
-            return (_this9$audio = _this9.audio) == null ? void 0 : _this9$audio.play('blocked');
+            var _this15$audio;
+            return (_this15$audio = _this15.audio) == null ? void 0 : _this15$audio.play('blocked');
           }).to(0.10, {
             angle: item.homeAngle + 8
           }, {
             easing: 'sineInOut'
           }).to(0.27, {
             position: landing,
-            scale: new Vec3(1, 1, 1),
+            scale: landingScale,
             angle: item.homeAngle
           }, {
             easing: 'quadIn'
@@ -996,11 +1378,19 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             node.setParent(parent);
             node.setSiblingIndex(sibling);
             node.setPosition(item.home);
-            if (item.kind === 'ball') _this9.bounceBall(item);else _this9.busy = false;
+            node.setScale(1, 1);
+            if (item.kind === 'ball') {
+              var _this15$audio2;
+              (_this15$audio2 = _this15.audio) == null || _this15$audio2.play('ball_land');
+              _this15.bounceBall(item);
+            } else {
+              _this15.busy = false;
+              _this15.resolveBoard();
+            }
           }).start();
         };
         _proto.bounceBall = function bounceBall(item) {
-          var _this10 = this;
+          var _this16 = this;
           var rise = Math.min(22, item.visibleHeight * 0.32);
           // Alternate the short roll about the original anchor so retries stay on the same surface.
           var roll = item.rollOffset === 0 ? 10 : -item.rollOffset;
@@ -1014,6 +1404,9 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             position: item.home
           }, {
             easing: 'quadIn'
+          }).call(function () {
+            var _this16$audio;
+            return (_this16$audio = _this16.audio) == null ? void 0 : _this16$audio.play('ball_bounce');
           }).to(0.07, {
             position: new Vec3(item.home.x, item.home.y + rise * 0.3, 0)
           }, {
@@ -1023,6 +1416,8 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           }, {
             easing: 'quadIn'
           }).call(function () {
+            var _this16$audio2;
+            (_this16$audio2 = _this16.audio) == null || _this16$audio2.play('ball_roll');
             var shadow = item.contactShadow;
             if (shadow) {
               tween(shadow).to(0.2, {
@@ -1040,95 +1435,130 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             item.home.set(rolled);
             item.homeAngle = angle;
             item.rollOffset += roll;
-            _this10.busy = false;
+            _this16.busy = false;
+            _this16.resolveBoard();
           }).start();
         };
         _proto.finishBin = function finishBin(bin) {
-          var candidates = this.availableCategories();
-          if (!candidates.length) {
-            bin.category = null;
-            this.renderBin(bin);
-            this.busy = false;
-            return;
-          }
-          if (this.level.mode === 'auto') {
-            var _this$audio4;
-            var next = candidates[0];
-            bin.category = next;
-            this.renderBin(bin);
-            this.busy = false;
-            (_this$audio4 = this.audio) == null || _this$audio4.play('change_box');
-            this.setStatus(CATEGORY_NAME[next] + " box is ready!");
-          } else {
-            this.showChoice(bin, candidates);
-          }
-        };
-        _proto.availableCategories = function availableCategories() {
-          var _this11 = this;
-          var order = ['toys', 'books', 'clothes', 'sports'];
-          return order.filter(function (c) {
-            return _this11.remaining[c] > 0 && !_this11.bins.some(function (b) {
-              return b.category === c;
+          var _this17 = this,
+            _node$getComponent;
+          this.swappingBin = bin;
+          var next = this.level.categories.find(function (category) {
+            return _this17.remaining[category] > 0 && !_this17.bins.some(function (slot) {
+              return slot.category === category;
             });
           });
-        };
-        _proto.showChoice = function showChoice(bin, candidates) {
-          var _this12 = this;
-          this.overlay = this.makeNode(this.node, 'Choose next box');
-          this.overlay.addComponent(UITransform).setContentSize(W, H);
-          this.overlay.addComponent(BlockInputEvents);
-          this.makePanel(this.overlay, 'Dim', 0, 0, W, H, new Color(44, 36, 30, 160), 0);
-          this.makePanel(this.overlay, 'Card', 0, 12, 600, 400, new Color('#FFF8EC'), 32);
-          this.makeLabel(this.overlay, 'Choose the next box', 0, 145, 540, 65, 35, INK, true);
-          this.makeLabel(this.overlay, 'Which category will you clear next?', 0, 86, 540, 50, 23, new Color('#817063'));
-          var width = 235;
-          var gap = 20;
-          candidates.forEach(function (category, i) {
-            var x = (i - (candidates.length - 1) / 2) * (width + gap);
-            var button = _this12.makeSprite(_this12.overlay, "bin_" + category, x, -35, width, 110);
-            _this12.drawCategoryIcon(button, category, -65, 1);
-            _this12.makeLabel(button, CATEGORY_NAME[category], 26, 11, width - 80, 34, 27, INK, true);
-            _this12.makeLabel(button, _this12.remaining[category] + " items", 26, -20, width - 80, 28, 21, INK);
-            button.on(Node.EventType.TOUCH_END, function () {
-              var _this12$overlay, _this12$audio;
-              bin.category = category;
-              _this12.renderBin(bin);
-              (_this12$overlay = _this12.overlay) == null || _this12$overlay.destroy();
-              _this12.overlay = null;
-              _this12.busy = false;
-              (_this12$audio = _this12.audio) == null || _this12$audio.play('change_box');
-              _this12.setStatus(CATEGORY_NAME[category] + " box is ready!");
-            }, _this12);
-          });
+          var node = bin.node;
+          var opacity = (_node$getComponent = node.getComponent(UIOpacity)) != null ? _node$getComponent : node.addComponent(UIOpacity);
+          var direction = bin.x > 0 ? 1 : -1;
+          var away = new Vec3(bin.x + direction * 40, bin.y + 116, 0);
+          tween(node).delay(0.16).call(function () {
+            var _this17$audio;
+            return (_this17$audio = _this17.audio) == null ? void 0 : _this17$audio.play('box_lift');
+          }).to(0.28, {
+            position: away,
+            angle: direction * -7,
+            scale: new Vec3(0.94, 0.94, 1)
+          }, {
+            easing: 'quadIn',
+            onUpdate: function onUpdate(_node, t) {
+              opacity.opacity = Math.round(255 * (1 - t * t));
+            }
+          }).call(function () {
+            bin.category = next != null ? next : null;
+            _this17.renderBin(bin);
+            node.setPosition(bin.x - direction * 25, bin.y + 79);
+            node.angle = direction * 5;
+            node.setScale(0.96, 0.96, 1);
+          }).to(0.29, {
+            position: new Vec3(bin.x, bin.y, 0),
+            angle: 0
+          }, {
+            easing: 'cubicIn',
+            onUpdate: function onUpdate(_node, t) {
+              opacity.opacity = Math.round(255 * Math.min(1, t * 1.7));
+            }
+          }).call(function () {
+            var _this17$audio2;
+            (_this17$audio2 = _this17.audio) == null || _this17$audio2.play('box_set');
+          }).to(0.07, {
+            scale: new Vec3(1.04, 0.94, 1)
+          }, {
+            easing: 'quadOut'
+          }).to(0.12, {
+            scale: new Vec3(1, 1, 1)
+          }, {
+            easing: 'sineOut'
+          }).call(function () {
+            _this17.swappingBin = null;
+            _this17.resolveBoard();
+          }).start();
         };
         _proto.showWin = function showWin() {
-          var _this$audio5,
-            _this13 = this;
-          (_this$audio5 = this.audio) == null || _this$audio5.play('win');
-          this.overlay = this.makeNode(this.node, 'Level complete');
-          this.overlay.addComponent(UITransform).setContentSize(W, H);
-          this.overlay.addComponent(BlockInputEvents);
-          this.makePanel(this.overlay, 'Dim', 0, 0, W, H, new Color(44, 36, 30, 164), 0);
-          this.makePanel(this.overlay, 'Card shadow', 0, -10, 596, 480, new Color('#B7996F'), 34);
-          this.makePanel(this.overlay, 'Card', 0, 0, 596, 480, new Color('#FFF8EC'), 34);
-          var art = this.makeNode(this.overlay, 'Completion stars').addComponent(Graphics);
+          var _this$audio9,
+            _this18 = this;
+          (_this$audio9 = this.audio) == null || _this$audio9.play('win');
+          var overlay = this.openOverlay('Level complete');
+          this.makePanel(overlay, 'Card shadow', 0, -10, 596, 480, new Color('#B7996F'), 34);
+          this.makePanel(overlay, 'Card', 0, 0, 596, 480, new Color('#FFF8EC'), 34);
+          var art = this.makeNode(overlay, 'Completion stars').addComponent(Graphics);
           for (var i = 0; i < 3; i++) this.drawStar(art, (i - 1) * 76, 157, i === 1 ? 37 : 27);
-          this.makeLabel(this.overlay, 'ROOM TIDIED!', 0, 70, 560, 72, 42, INK, true);
+          this.makeLabel(overlay, 'ALL TIDIED!', 0, 70, 560, 72, 42, INK, true);
           var count = Object.keys(this.total).reduce(function (n, key) {
-            return n + _this13.total[key];
+            return n + _this18.total[key];
           }, 0);
-          this.makeLabel(this.overlay, count + " items back where they belong.", 0, 0, 530, 54, 25, new Color('#827267'));
-          this.makeLabel(this.overlay, this.shownHint ? 'A little help. A lovely tidy room.' : 'Beautifully done — all on your own!', 0, -54, 530, 36, 20, new Color('#9A805F'));
+          this.makeLabel(overlay, count + " items back where they belong.", 0, 0, 530, 54, 25, new Color('#827267'));
+          this.makeLabel(overlay, this.shownHint ? 'A little help. A lovely tidy room.' : 'Beautifully done — all on your own!', 0, -54, 530, 36, 20, new Color('#9A805F'));
           var last = this.levelIndex === LEVELS.length - 1;
-          var button = this.makeSprite(this.overlay, 'find', 0, -150, 344, 76);
-          this.makeLabel(button, last ? 'Play Again' : 'Next Room', 0, 0, 300, 56, 28, INK, true);
-          button.on(Node.EventType.TOUCH_END, function () {
-            return _this13.loadLevel(_this13.levelIndex + 1);
-          }, this);
+          var button = this.makeSprite(overlay, 'find', 0, -150, 344, 76);
+          var title = last ? 'Play Again' : 'Next Space';
+          var buttonLabel = this.makeLabel(button, title, 0, 0, 300, 56, 28, INK, true);
+          var next = (this.levelIndex + 1) % LEVELS.length;
+          var preloaded = this.loadLevelArt(next)["catch"](function () {
+            return undefined;
+          });
+          button.on(Node.EventType.TOUCH_END, /*#__PURE__*/_asyncToGenerator( /*#__PURE__*/_regeneratorRuntime().mark(function _callee4() {
+            return _regeneratorRuntime().wrap(function _callee4$(_context4) {
+              while (1) switch (_context4.prev = _context4.next) {
+                case 0:
+                  if (!_this18.busy) {
+                    _context4.next = 2;
+                    break;
+                  }
+                  return _context4.abrupt("return");
+                case 2:
+                  _this18.busy = true;
+                  buttonLabel.string = 'Opening…';
+                  _context4.prev = 4;
+                  _context4.next = 7;
+                  return preloaded;
+                case 7:
+                  _context4.next = 9;
+                  return _this18.loadLevelArt(next);
+                case 9:
+                  if (_this18.node.isValid) _this18.loadLevel(next);
+                  _context4.next = 16;
+                  break;
+                case 12:
+                  _context4.prev = 12;
+                  _context4.t0 = _context4["catch"](4);
+                  console.warn('Could not load next space', _context4.t0);
+                  if (button.isValid) {
+                    buttonLabel.string = 'Try Again';
+                    _this18.busy = false;
+                  }
+                case 16:
+                case "end":
+                  return _context4.stop();
+              }
+            }, _callee4, null, [[4, 12]]);
+          })), this);
         };
         _proto.allClear = function allClear() {
           return this.piles.every(function (p) {
             return p.length === 0;
+          }) && this.held.every(function (item) {
+            return item === null;
           });
         };
         _proto.clearDynamicNodes = function clearDynamicNodes() {
@@ -1138,21 +1568,21 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             node.children.forEach(stop);
           };
           for (var _i3 = 0, _arr2 = [].concat(this.node.children); _i3 < _arr2.length; _i3++) {
-            var _this$audio6;
+            var _this$audio10;
             var child = _arr2[_i3];
-            if (child.name !== 'Camera' && child.name !== 'RoomBackdrop' && child !== ((_this$audio6 = this.audio) == null ? void 0 : _this$audio6.node)) {
+            if (child.name !== 'Camera' && child.name !== 'RoomBackdrop' && child !== ((_this$audio10 = this.audio) == null ? void 0 : _this$audio10.node)) {
               stop(child);
               child.destroy();
             }
           }
         };
         _proto.updateProgress = function updateProgress() {
-          var _this14 = this;
+          var _this19 = this;
           var total = Object.keys(this.total).reduce(function (n, c) {
-            return n + _this14.total[c];
+            return n + _this19.total[c];
           }, 0);
           var done = Object.keys(this.collected).reduce(function (n, c) {
-            return n + _this14.collected[c];
+            return n + _this19.collected[c];
           }, 0);
           if (this.progressText) this.progressText.string = done + " / " + total;
           if (!this.progressBar) return;
@@ -1165,26 +1595,35 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
           }
         };
         _proto.showHint = function showHint() {
-          var _this15 = this,
+          var _this20 = this,
+            _ref2,
+            _ref3,
             _candidates$find,
-            _this$audio7;
+            _this$audio11;
           if (this.busy || this.roomTouch || this.overlay) return;
           this.roomVelocity = 0;
           var roomX = this.room.position.x;
           var candidates = this.itemViews.filter(function (v) {
-            return v.node.isValid && v.index === _this15.piles[v.pile].length - 1 && _this15.bins.some(function (b) {
-              return b.category === ITEM_CATEGORY[v.kind];
+            return v.node.isValid && v.index === _this20.piles[v.pile].length - 1 && _this20.bins.some(function (b) {
+              return b !== _this20.swappingBin && b.category === ITEM_CATEGORY[v.kind];
             });
           });
-          var next = (_candidates$find = candidates.find(function (item) {
-            return Math.abs(item.home.x + roomX) + item.visibleWidth / 2 <= W / 2 - 18;
-          })) != null ? _candidates$find : candidates[0];
+          var visible = function visible(item) {
+            return Math.abs(item.home.x * _this20.roomScale + roomX) + item.visibleWidth * _this20.roomScale / 2 <= _this20.roomViewportWidth / 2 - 18;
+          };
+          var staging = this.held.indexOf(null) >= 0 ? this.itemViews.filter(function (item) {
+            var pile = _this20.piles[item.pile];
+            return item.index === pile.length - 1 && pile.slice(0, -1).some(function (kind) {
+              return _this20.bins.some(function (bin) {
+                return bin.category === ITEM_CATEGORY[kind];
+              });
+            });
+          }) : [];
+          var next = (_ref2 = (_ref3 = (_candidates$find = candidates.find(visible)) != null ? _candidates$find : candidates[0]) != null ? _ref3 : staging.find(visible)) != null ? _ref2 : staging[0];
           if (!next) return;
           this.shownHint = true;
-          (_this$audio7 = this.audio) == null || _this$audio7.play('hint');
-          if (Math.abs(next.home.x + roomX) + next.visibleWidth / 2 > W / 2 - 18) {
-            this.panRoom(-next.home.x);
-          }
+          (_this$audio11 = this.audio) == null || _this$audio11.play('hint');
+          if (!visible(next)) this.panRoom(-next.home.x * this.roomScale);
           Tween.stopAllByTarget(next.node);
           next.node.setPosition(next.home);
           next.node.setScale(1, 1);
@@ -1195,15 +1634,23 @@ System.register("chunks:///_virtual/DailyTidyRoot.ts", ['./rollupPluginModLoBabe
             position: next.home,
             scale: new Vec3(1, 1, 1)
           }).union().repeat(2).start();
-          this.setStatus("Try this item \u2014 it belongs in " + CATEGORY_NAME[ITEM_CATEGORY[next.kind]] + ".");
+          this.setStatus(candidates.length ? "Try this item \u2014 it belongs in " + CATEGORY_NAME[ITEM_CATEGORY[next.kind]] + "." : 'Park this item to uncover something you can sort.');
         };
         _proto.collectFeedback = function collectFeedback(bin) {
           Tween.stopAllByTarget(bin.node);
           bin.node.setScale(1, 1);
-          tween(bin.node).to(0.1, {
-            scale: new Vec3(1.025, 1.025, 1)
-          }).to(0.14, {
+          tween(bin.node).to(0.075, {
+            scale: new Vec3(1.055, 0.91, 1)
+          }, {
+            easing: 'quadOut'
+          }).to(0.105, {
+            scale: new Vec3(0.985, 1.045, 1)
+          }, {
+            easing: 'sineOut'
+          }).to(0.095, {
             scale: new Vec3(1, 1, 1)
+          }, {
+            easing: 'sineInOut'
           }).start();
         };
         _proto.drawStar = function drawStar(graphics, x, y, radius) {
@@ -1321,7 +1768,38 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
       });
       // Visible glass on attic.jpg, in a 2× crop with origin at artwork pixel (155, 80).
       // Each quad follows the glass edges where the curtains cover the frame.
-      var PANES = [[[167, 48], [205, 48], [205, 183], [134, 183]], [[228, 48], [346, 49], [349, 185], [228, 185]], [[413, 51], [529, 51], [529, 185], [413, 185]], [[554, 51], [640, 52], [666, 185], [554, 185]], [[125, 206], [205, 206], [205, 334], [92, 334]], [[229, 206], [347, 206], [349, 334], [229, 334]], [[414, 208], [530, 208], [530, 334], [414, 334]], [[555, 208], [673, 208], [675, 334], [555, 334]], [[93, 359], [206, 359], [206, 500], [92, 500]], [[230, 359], [348, 359], [349, 500], [230, 500]], [[415, 359], [530, 359], [530, 500], [414, 500]], [[555, 359], [674, 359], [676, 500], [555, 500]]];
+      var ATTIC_PANES = [[[167, 48], [205, 48], [205, 183], [134, 183]], [[228, 48], [346, 49], [349, 185], [228, 185]], [[413, 51], [529, 51], [529, 185], [413, 185]], [[554, 51], [640, 52], [666, 185], [554, 185]], [[125, 206], [205, 206], [205, 334], [92, 334]], [[229, 206], [347, 206], [349, 334], [229, 334]], [[414, 208], [530, 208], [530, 334], [414, 334]], [[555, 208], [673, 208], [675, 334], [555, 334]], [[93, 359], [206, 359], [206, 500], [92, 500]], [[230, 359], [348, 359], [349, 500], [230, 500]], [[415, 359], [530, 359], [530, 500], [414, 500]], [[555, 359], [674, 359], [676, 500], [555, 500]]];
+
+      // Each pane follows exposed glass. Coordinates are relative to the artwork's top-left.
+      function pane(left, top, right, bottom) {
+        return [[left, top], [right, top], [right, bottom], [left, bottom]];
+      }
+      var ROOM_WINDOWS = exports('ROOM_WINDOWS', {
+        attic: {
+          x: 155,
+          y: 80,
+          density: 2,
+          panes: ATTIC_PANES
+        },
+        bedroom: {
+          x: 0,
+          y: 0,
+          density: 1,
+          panes: [pane(106, 158, 139, 216), pane(185, 164, 332, 406), pane(376, 170, 425, 224), pane(106, 227, 139, 278), pane(376, 236, 431, 280), pane(96, 290, 139, 350), pane(378, 290, 438, 337), pane(87, 359, 138, 417), pane(378, 347, 455, 409)]
+        },
+        studio: {
+          x: 0,
+          y: 0,
+          density: 1,
+          panes: [pane(116, 130, 193, 179), pane(203, 118, 264, 178), pane(287, 119, 353, 178), pane(367, 121, 424, 179), pane(444, 120, 487, 178), pane(505, 123, 545, 179), pane(105, 194, 190, 250), pane(203, 194, 262, 250), pane(286, 194, 353, 250), pane(369, 194, 424, 250), pane(443, 193, 486, 250), pane(502, 193, 555, 251), pane(107, 263, 189, 335), pane(202, 263, 263, 335), pane(286, 264, 353, 336), pane(370, 264, 426, 337), pane(444, 263, 488, 336), pane(503, 265, 562, 337)]
+        },
+        office: {
+          x: 0,
+          y: 0,
+          density: 1,
+          panes: [pane(103, 140, 119, 203), pane(129, 139, 171, 203), pane(181, 138, 228, 203), pane(238, 140, 266, 203), pane(89, 216, 119, 279), pane(129, 215, 170, 279), pane(182, 215, 228, 279), pane(239, 215, 276, 279), pane(79, 301, 118, 365), pane(130, 300, 170, 365), pane(183, 300, 228, 365), pane(240, 301, 287, 365), pane(79, 377, 119, 444), pane(129, 377, 171, 444), pane(182, 377, 229, 444), pane(239, 377, 286, 444)]
+        }
+      });
       var RAIN_GLASS = new Color(101, 129, 149, 119);
       var SNOW_GLASS = new Color(230, 240, 243, 142);
       var RAIN = new Color(218, 237, 247, 169);
@@ -1335,13 +1813,21 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
         return [(tl[0] + (tr[0] - tl[0]) * u) * (1 - v) + (bl[0] + (br[0] - bl[0]) * u) * v, (tl[1] + (tr[1] - tl[1]) * u) * (1 - v) + (bl[1] + (br[1] - bl[1]) * u) * v];
       }
       var DailyTidyWeather = exports('DailyTidyWeather', /*#__PURE__*/function () {
-        function DailyTidyWeather(node) {
+        function DailyTidyWeather(node, panes) {
           this.glass = void 0;
           this.particles = void 0;
           this.weather = 'sunny';
           this.time = 0;
           this.frameTime = 0;
+          this.width = void 0;
           this.node = node;
+          this.panes = panes;
+          this.width = Math.max.apply(Math, panes.map(function (p) {
+            return Math.max.apply(Math, p.map(function (_ref) {
+              var x = _ref[0];
+              return x;
+            }));
+          }));
           this.glass = node.addComponent(Graphics);
           var animation = new Node('Window particles');
           animation.layer = node.layer;
@@ -1356,13 +1842,13 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
           this.glass.clear();
           if (weather !== 'sunny') {
             this.glass.fillColor = weather === 'rain' ? RAIN_GLASS : SNOW_GLASS;
-            for (var _i = 0, _PANES = PANES; _i < _PANES.length; _i++) {
-              var pane = _PANES[_i];
-              this.glass.moveTo(pane[0][0], -pane[0][1]);
-              for (var _iterator = _createForOfIteratorHelperLoose(pane.slice(1)), _step; !(_step = _iterator()).done;) {
-                var _step$value = _step.value,
-                  x = _step$value[0],
-                  y = _step$value[1];
+            for (var _iterator = _createForOfIteratorHelperLoose(this.panes), _step; !(_step = _iterator()).done;) {
+              var _pane = _step.value;
+              this.glass.moveTo(_pane[0][0], -_pane[0][1]);
+              for (var _iterator2 = _createForOfIteratorHelperLoose(_pane.slice(1)), _step2; !(_step2 = _iterator2()).done;) {
+                var _step2$value = _step2.value,
+                  x = _step2$value[0],
+                  y = _step2$value[1];
                 this.glass.lineTo(x, -y);
               }
               this.glass.close();
@@ -1381,17 +1867,22 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
         };
         _proto.drawSnowDrifts = function drawSnowDrifts() {
           this.glass.fillColor = new Color(247, 249, 242, 229);
-          for (var _iterator2 = _createForOfIteratorHelperLoose(PANES.slice(8)), _step2; !(_step2 = _iterator2()).done;) {
-            var pane = _step2.value;
-            var _point = point(pane, 0, 0.94),
+          var sill = Math.max.apply(Math, this.panes.map(function (p) {
+            return p[2][1];
+          }));
+          for (var _iterator3 = _createForOfIteratorHelperLoose(this.panes.filter(function (p) {
+              return p[2][1] >= sill - 22;
+            })), _step3; !(_step3 = _iterator3()).done;) {
+            var _pane2 = _step3.value;
+            var _point = point(_pane2, 0, 0.94),
               x = _point[0],
               y = _point[1];
             this.glass.moveTo(x, -y);
-            for (var _i2 = 0, _arr = [[0.22, 0.91], [0.45, 0.95], [0.73, 0.92], [1, 0.93], [1, 1], [0, 1]]; _i2 < _arr.length; _i2++) {
-              var _arr$_i = _arr[_i2],
+            for (var _i = 0, _arr = [[0.22, 0.91], [0.45, 0.95], [0.73, 0.92], [1, 0.93], [1, 1], [0, 1]]; _i < _arr.length; _i++) {
+              var _arr$_i = _arr[_i],
                 u = _arr$_i[0],
                 v = _arr$_i[1];
-              var _point2 = point(pane, u, v),
+              var _point2 = point(_pane2, u, v),
                 px = _point2[0],
                 py = _point2[1];
               this.glass.lineTo(px, -py);
@@ -1411,7 +1902,7 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
             g.strokeColor = BIRD;
             g.lineWidth = 1.7;
             for (var i = 0; i < 2; i++) {
-              var _point3 = point(PANES[2], 0.09 + cycle * 0.49 + i * 0.16, 0.32 + i * 0.13),
+              var _point3 = point(this.panes[2], 0.09 + cycle * 0.49 + i * 0.16, 0.32 + i * 0.13),
                 x = _point3[0],
                 y = _point3[1];
               var flap = 2 + Math.sin(this.time * 19 + i) * 2;
@@ -1426,13 +1917,13 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
           g.strokeColor = RAIN;
           g.fillColor = SNOW;
           g.lineWidth = 1.45;
-          PANES.forEach(function (pane, index) {
+          this.panes.forEach(function (pane, index) {
             var count = raining ? 8 : 6;
-            for (var _i3 = 0; _i3 < count; _i3++) {
-              var speed = raining ? 1.7 + _i3 * 0.13 : 0.23 + _i3 * 0.018;
-              var v = (index * 0.071 + _i3 * 0.147 + _this.time * speed) % 1;
-              var drift = raining ? -v * 0.14 : Math.sin(_this.time * 1.2 + _i3) * 0.065;
-              var u = 0.21 + _i3 * 0.085 + index % 3 * 0.02 + drift;
+            for (var _i2 = 0; _i2 < count; _i2++) {
+              var speed = raining ? 1.7 + _i2 * 0.13 : 0.23 + _i2 * 0.018;
+              var v = (index * 0.071 + _i2 * 0.147 + _this.time * speed) % 1;
+              var drift = raining ? -v * 0.14 : Math.sin(_this.time * 1.2 + _i2) * 0.065;
+              var u = 0.21 + _i2 * 0.085 + index % 3 * 0.02 + drift;
               var _point4 = point(pane, u, 0.025 + v * (raining ? 0.83 : 0.94)),
                 _x = _point4[0],
                 _y = _point4[1];
@@ -1443,7 +1934,7 @@ System.register("chunks:///_virtual/DailyTidyWeather.ts", ['./rollupPluginModLoB
                 g.moveTo(_x, -_y);
                 g.lineTo(endX, -endY);
               } else {
-                g.circle(_x, -_y, 1.7 + _i3 % 3 * 0.6);
+                g.circle(_x, -_y, 1.7 + _i2 % 3 * 0.6);
               }
             }
           });
@@ -1737,7 +2228,21 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
       cclegacy = module.cclegacy;
     }],
     execute: function () {
+      exports('emptyCategoryCounts', emptyCategoryCounts);
       cclegacy._RF.push({}, "dc61d/QGKJOPInhhLHoHZQB", "LevelData", undefined);
+      var CATEGORY_NAME = exports('CATEGORY_NAME', {
+        toys: 'Toys',
+        books: 'Books',
+        clothes: 'Clothes',
+        sports: 'Sports',
+        linens: 'Linens',
+        crafts: 'Crafts',
+        tools: 'Tools',
+        mail: 'Mail',
+        papers: 'Papers',
+        snacks: 'Snacks',
+        picnic: 'Picnic Gear'
+      });
       var ITEM_CATEGORY = exports('ITEM_CATEGORY', {
         teddy: 'toys',
         car: 'toys',
@@ -1747,14 +2252,34 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
         green_book: 'books',
         shirt: 'clothes',
         hat: 'clothes',
-        ball: 'sports'
+        pajamas: 'clothes',
+        slipper: 'clothes',
+        towel: 'linens',
+        yarn: 'crafts',
+        ribbon: 'crafts',
+        watercolor: 'crafts',
+        brush: 'tools',
+        tape: 'tools',
+        stapler: 'tools',
+        envelope: 'mail',
+        parcel: 'mail',
+        folder: 'papers',
+        apple: 'snacks',
+        sandwich: 'snacks',
+        flask: 'picnic',
+        lantern: 'picnic',
+        ball: 'sports',
+        shuttlecock: 'sports',
+        disc: 'sports'
       });
-      var CATEGORY_NAME = exports('CATEGORY_NAME', {
-        toys: 'Toys',
-        books: 'Books',
-        clothes: 'Clothes',
-        sports: 'Sports'
-      });
+      function emptyCategoryCounts() {
+        var counts = {};
+        for (var _i = 0, _arr = Object.keys(CATEGORY_NAME); _i < _arr.length; _i++) {
+          var category = _arr[_i];
+          counts[category] = 0;
+        }
+        return counts;
+      }
 
       // Coordinates follow the furniture surfaces in the artwork. Shelves use
       // shallower, smaller arrangements than the sofa and the foreground rugs.
@@ -1771,12 +2296,6 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           width: 74,
           angle: 3,
           stackOffset: 0.22
-        },
-        windowLeft: {
-          x: 227,
-          y: 368,
-          width: 64,
-          angle: -1
         },
         sofaLeft: {
           x: 343,
@@ -1810,30 +2329,11 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           angle: -4,
           stackOffset: 0.24
         },
-        leftRugEdge: {
-          x: 120,
-          y: 765,
-          width: 76,
-          angle: 1
-        },
-        leftRugBall: {
-          x: 535,
-          y: 748,
-          width: 85,
-          angle: 4
-        },
         shelfHigh: {
           x: 786,
           y: 185,
           width: 75,
           angle: 2
-        },
-        shelfMiddle: {
-          x: 691,
-          y: 279,
-          width: 68,
-          angle: -2,
-          stackOffset: 0.23
         },
         shelfLow: {
           x: 758,
@@ -1860,80 +2360,9 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           y: 640,
           width: 81,
           angle: 2
-        },
-        deskRugEdge: {
-          x: 1061,
-          y: 722,
-          width: 81,
-          angle: 2
-        },
-        deskShelf: {
-          x: 1245,
-          y: 219,
-          width: 74,
-          angle: 1,
-          stackOffset: -0.22
-        },
-        readerShelfMid: {
-          x: 1305,
-          y: 305,
-          width: 72,
-          angle: 2,
-          stackOffset: -0.20
-        },
-        readerShelfLow: {
-          x: 1262,
-          y: 391,
-          width: 60,
-          angle: -2
-        },
-        readerSeat: {
-          x: 1393,
-          y: 527,
-          width: 100,
-          angle: 3,
-          stackOffset: 0.22
-        },
-        cabinetLeft: {
-          x: 1663,
-          y: 427,
-          width: 87,
-          angle: -3,
-          stackOffset: -0.22
-        },
-        cabinetRight: {
-          x: 1784,
-          y: 442,
-          width: 76,
-          angle: 4
-        },
-        rightRugFront: {
-          x: 1322,
-          y: 752,
-          width: 112,
-          angle: 4,
-          stackOffset: -0.24
-        },
-        rightRugBack: {
-          x: 1554,
-          y: 702,
-          width: 90,
-          angle: -2
-        },
-        rightFloor: {
-          x: 1755,
-          y: 679,
-          width: 82,
-          angle: 2
-        },
-        rightRugEdge: {
-          x: 1705,
-          y: 757,
-          width: 82,
-          angle: 2
         }
       };
-      function pile(surface) {
+      function atticPile(surface) {
         for (var _len = arguments.length, items = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
           items[_key - 1] = arguments[_key];
         }
@@ -1941,27 +2370,70 @@ System.register("chunks:///_virtual/LevelData.ts", ['./rollupPluginModLoBabelHel
           items: items
         });
       }
+      function pile(x, y, width) {
+        for (var _len2 = arguments.length, items = new Array(_len2 > 3 ? _len2 - 3 : 0), _key2 = 3; _key2 < _len2; _key2++) {
+          items[_key2 - 3] = arguments[_key2];
+        }
+        return {
+          x: x,
+          y: y,
+          width: width,
+          angle: x % 7 - 3,
+          stackOffset: x % 2 ? 0.22 : -0.22,
+          items: items
+        };
+      }
       var LEVELS = exports('LEVELS', [{
         title: 'The Living Room',
-        mode: 'auto',
-        active: ['toys', 'books', 'clothes'],
-        piles: [
-        // 8 at the window and sofa.
-        pile('sideTable', 'blue_book'), pile('windowSill', 'car'), pile('sofaLeft', 'red_book'), pile('sofaRight', 'shirt'), pile('sofaFoot', 'teddy'), pile('leftRugBack', 'hat'), pile('leftRugFront', 'green_book', 'blue_book'),
-        // 7 around the shelves and desk.
-        pile('shelfHigh', 'green_book'), pile('shelfLow', 'car'), pile('deskCorner', 'shirt', 'red_book'), pile('stool', 'shirt', 'hat'), pile('deskFloor', 'train'),
-        // 7 in the reading corner.
-        pile('readerShelfLow', 'teddy'), pile('readerSeat', 'shirt'), pile('cabinetLeft', 'hat'), pile('rightRugFront', 'red_book', 'blue_book'), pile('rightRugBack', 'train'), pile('rightFloor', 'car')]
+        room: 'attic',
+        categories: ['toys', 'books', 'clothes', 'linens'],
+        focus: {
+          left: 10,
+          right: 1170
+        },
+        stagingCapacity: 6,
+        piles: [atticPile('sideTable', 'blue_book', 'red_book', 'green_book'), atticPile('windowSill', 'car'), atticPile('sofaLeft', 'pajamas', 'red_book', 'shirt', 'teddy'), atticPile('sofaRight', 'shirt', 'pajamas', 'towel'), atticPile('sofaFoot', 'teddy'), atticPile('leftRugBack', 'hat'), atticPile('leftRugFront', 'green_book', 'blue_book', 'car', 'train'), atticPile('shelfHigh', 'green_book'), atticPile('shelfLow', 'car', 'towel'), atticPile('deskCorner', 'shirt', 'red_book', 'towel'), atticPile('stool', 'shirt', 'hat'), atticPile('deskFloor', 'train'), pile(682, 366, 60, 'red_book', 'teddy'), pile(617, 520, 77, 'shirt'), pile(960, 374, 70, 'hat'), pile(626, 777, 97, 'pajamas', 'red_book', 'blue_book', 'hat'), pile(810, 721, 76, 'train'), pile(935, 715, 75, 'car'), pile(232, 361, 65, 'red_book'), pile(796, 280, 66, 'blue_book', 'hat'), pile(678, 280, 65, 'car'), pile(1099, 381, 69, 'green_book'), pile(1010, 765, 80, 'hat'), pile(191, 475, 59, 'towel'), pile(454, 361, 57, 'towel'), pile(460, 742, 99, 'towel'), pile(384, 784, 103, 'shirt', 'hat'), pile(1010, 488, 57, 'towel'), pile(1077, 703, 92, 'pajamas', 'blue_book'), pile(346, 361, 60, 'towel'), pile(693, 742, 81, 'green_book', 'car'), pile(918, 778, 77, 'towel')]
       }, {
-        title: 'A Busy Afternoon',
-        mode: 'auto',
-        active: ['toys', 'books', 'clothes'],
-        piles: [pile('sideTable', 'blue_book'), pile('windowSill', 'red_book', 'green_book'), pile('sofaLeft', 'teddy'), pile('sofaRight', 'shirt'), pile('sofaFoot', 'car'), pile('leftRugBack', 'hat'), pile('leftRugFront', 'red_book', 'shirt'), pile('leftRugEdge', 'ball'), pile('shelfHigh', 'green_book'), pile('shelfMiddle', 'blue_book', 'red_book'), pile('shelfLow', 'train'), pile('deskCorner', 'red_book', 'hat'), pile('stool', 'shirt', 'hat'), pile('deskRugEdge', 'ball'), pile('readerShelfMid', 'blue_book'), pile('readerSeat', 'shirt', 'green_book'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightRugEdge', 'ball')]
+        title: 'A Quiet Morning',
+        room: 'bedroom',
+        categories: ['clothes', 'linens', 'toys', 'books'],
+        focus: {
+          left: 61,
+          right: 1290
+        },
+        stagingCapacity: 5,
+        piles: [pile(283, 519, 88, 'pajamas', 'shirt', 'green_book'), pile(282, 435, 76, 'red_book', 'blue_book', 'slipper'), pile(478, 505, 86, 'pajamas', 'shirt', 'slipper', 'teddy'), pile(634, 511, 96, 'towel', 'shirt'), pile(750, 523, 88, 'pajamas'), pile(136, 439, 72, 'hat'), pile(330, 733, 100, 'pajamas', 'towel', 'slipper', 'hat'), pile(127, 713, 75, 'slipper'), pile(761, 229, 73, 'teddy'), pile(984, 326, 85, 'pajamas', 'slipper'), pile(991, 660, 81, 'slipper'), pile(804, 727, 99, 'towel', 'hat'), pile(1072, 414, 92, 'green_book', 'towel'), pile(1119, 738, 85, 'pajamas', 'hat'), pile(946, 228, 76, 'towel', 'red_book'), pile(545, 511, 89, 'shirt', 'pajamas', 'teddy', 'blue_book'), pile(1215, 419, 74, 'blue_book', 'shirt', 'hat', 'slipper'), pile(347, 516, 69, 'towel', 'slipper'), pile(460, 762, 82, 'pajamas'), pile(179, 663, 73, 'slipper'), pile(699, 781, 88, 'pajamas', 'towel', 'teddy'), pile(939, 745, 81, 'red_book'), pile(1092, 327, 65, 'towel'), pile(571, 739, 79, 'slipper'), pile(1154, 418, 67, 'hat'), pile(387, 434, 59, 'green_book'), pile(603, 728, 96, 'shirt', 'slipper'), pile(903, 326, 72, 'blue_book'), pile(1185, 677, 80, 'towel', 'slipper'), pile(210, 765, 76, 'red_book'), pile(707, 537, 81, 'pajamas', 'towel'), pile(1018, 792, 74, 'blue_book')]
       }, {
-        title: 'Choose Your Next Box',
-        mode: 'choose',
-        active: ['toys', 'books'],
-        piles: [pile('sideTable', 'green_book'), pile('windowSill', 'blue_book', 'red_book'), pile('windowLeft', 'hat'), pile('sofaLeft', 'shirt', 'red_book'), pile('sofaRight', 'teddy'), pile('sofaFoot', 'train'), pile('leftRugBall', 'ball'), pile('leftRugFront', 'green_book', 'shirt'), pile('shelfHigh', 'blue_book'), pile('shelfMiddle', 'red_book', 'hat'), pile('shelfLow', 'car'), pile('deskCorner', 'blue_book', 'green_book'), pile('stool', 'shirt', 'hat'), pile('deskRugEdge', 'ball'), pile('deskShelf', 'red_book'), pile('readerShelfMid', 'green_book', 'shirt'), pile('readerShelfLow', 'teddy'), pile('readerSeat', 'shirt'), pile('cabinetLeft', 'blue_book', 'hat'), pile('cabinetRight', 'car'), pile('rightRugFront', 'ball'), pile('rightRugBack', 'train'), pile('rightRugEdge', 'ball')]
+        title: 'After Craft Time',
+        room: 'studio',
+        categories: ['crafts', 'tools', 'papers'],
+        visibleBoxes: 2,
+        focus: {
+          left: 48,
+          right: 1243
+        },
+        stagingCapacity: 5,
+        piles: [pile(309, 361, 82, 'folder', 'ribbon', 'yarn'), pile(461, 360, 84, 'watercolor', 'brush', 'folder'), pile(151, 357, 74, 'ribbon'), pile(284, 463, 96, 'folder', 'watercolor', 'ribbon', 'brush'), pile(457, 451, 93, 'watercolor', 'folder', 'ribbon', 'yarn'), pile(528, 650, 86, 'yarn', 'tape'), pile(139, 677, 85, 'ribbon'), pile(332, 744, 105, 'folder', 'folder', 'watercolor', 'tape'), pile(750, 179, 83, 'yarn'), pile(808, 263, 87, 'folder', 'tape'), pile(647, 437, 76, 'ribbon'), pile(599, 362, 86, 'watercolor', 'ribbon'), pile(923, 489, 87, 'stapler'), pile(785, 672, 83, 'yarn'), pile(1098, 177, 80, 'watercolor', 'brush'), pile(1129, 260, 75, 'yarn', 'folder'), pile(1092, 362, 91, 'watercolor'), pile(522, 450, 69, 'ribbon', 'tape'), pile(858, 363, 84, 'folder', 'ribbon', 'brush', 'stapler'), pile(1067, 547, 78, 'watercolor', 'stapler'), pile(616, 744, 88, 'folder', 'watercolor', 'brush', 'yarn'), pile(1183, 747, 79, 'ribbon'), pile(1190, 364, 73, 'tape'), pile(970, 362, 75, 'brush'), pile(908, 734, 87, 'folder'), pile(700, 566, 80, 'watercolor'), pile(219, 660, 86, 'folder'), pile(485, 762, 102, 'ribbon', 'brush'), pile(704, 492, 73, 'folder'), pile(993, 547, 80, 'folder'), pile(1110, 668, 94, 'ribbon', 'yarn'), pile(654, 259, 75, 'folder'), pile(1123, 631, 77, 'watercolor', 'tape')]
+      }, {
+        title: 'The Parcel Office',
+        room: 'office',
+        categories: ['mail', 'papers', 'tools', 'books'],
+        focus: {
+          left: 34,
+          right: 1274
+        },
+        stagingCapacity: 4,
+        piles: [pile(113, 470, 69, 'folder', 'envelope'), pile(240, 470, 66, 'tape'), pile(126, 520, 91, 'parcel'), pile(236, 523, 98, 'green_book', 'envelope', 'parcel', 'red_book'), pile(443, 206, 78, 'folder'), pile(602, 205, 79, 'parcel', 'envelope', 'folder'), pile(454, 317, 73, 'stapler'), pile(634, 316, 74, 'envelope', 'folder'), pile(410, 544, 94, 'envelope', 'folder', 'parcel', 'tape'), pile(542, 541, 96, 'envelope', 'folder', 'blue_book'), pile(164, 720, 91, 'parcel'), pile(363, 742, 87, 'folder'), pile(661, 451, 78, 'stapler'), pile(801, 335, 79, 'parcel'), pile(981, 337, 75, 'folder', 'envelope'), pile(1114, 335, 76, 'tape'), pile(822, 451, 91, 'envelope'), pile(980, 447, 96, 'envelope', 'folder', 'tape', 'stapler'), pile(1110, 449, 92, 'parcel'), pile(1169, 452, 53, 'envelope'), pile(817, 526, 86, 'tape'), pile(1001, 524, 93, 'red_book', 'envelope'), pile(785, 644, 79, 'parcel'), pile(1064, 645, 79, 'folder'), pile(496, 208, 67, 'stapler', 'green_book'), pile(788, 526, 83, 'green_book', 'parcel'), pile(373, 546, 67, 'tape'), pile(1078, 521, 72, 'folder', 'envelope'), pile(873, 335, 71, 'parcel', 'stapler'), pile(717, 748, 81, 'envelope', 'parcel', 'envelope', 'folder'), pile(1189, 691, 78, 'parcel'), pile(134, 771, 97, 'blue_book'), pile(450, 693, 86, 'red_book'), pile(759, 594, 64, 'folder'), pile(957, 756, 94, 'blue_book'), pile(1043, 743, 81, 'green_book'), pile(924, 708, 81, 'blue_book'), pile(1164, 772, 84, 'folder', 'parcel'), pile(550, 742, 79, 'envelope', 'folder')]
+      }, {
+        title: 'After the Picnic',
+        room: 'park',
+        categories: ['snacks', 'picnic', 'linens', 'sports'],
+        focus: {
+          left: 665,
+          right: 1842
+        },
+        stagingCapacity: 4,
+        piles: [pile(1468, 315, 60, 'apple'), pile(1533, 370, 69, 'sandwich'), pile(1350, 452, 52, 'towel', 'flask'), pile(1490, 568, 75, 'disc', 'towel', 'sandwich', 'apple'), pile(1781, 515, 58, 'apple'), pile(1202, 537, 70, 'ball'), pile(1236, 435, 68, 'towel'), pile(1305, 655, 76, 'towel', 'sandwich', 'disc'), pile(866, 664, 77, 'ball'), pile(807, 752, 61, 'shuttlecock'), pile(1276, 519, 52, 'lantern'), pile(1156, 384, 67, 'disc', 'apple', 'sandwich'), pile(757, 363, 60, 'flask'), pile(795, 528, 65, 'shuttlecock'), pile(747, 646, 84, 'ball'), pile(879, 400, 72, 'towel', 'apple'), pile(963, 399, 65, 'towel', 'flask', 'shuttlecock'), pile(1040, 397, 64, 'sandwich'), pile(927, 543, 78, 'towel', 'towel', 'sandwich', 'apple'), pile(1073, 625, 89, 'disc'), pile(1135, 382, 57, 'lantern'), pile(1174, 512, 69, 'shuttlecock'), pile(1217, 690, 90, 'ball'), pile(1384, 315, 63, 'sandwich'), pile(1498, 313, 54, 'lantern'), pile(1602, 313, 56, 'flask'), pile(1718, 315, 67, 'apple'), pile(1428, 370, 69, 'disc', 'sandwich'), pile(1642, 370, 67, 'towel', 'disc'), pile(1373, 551, 78, 'disc', 'towel', 'towel', 'flask'), pile(1499, 522, 77, 'sandwich'), pile(1609, 551, 80, 'towel', 'sandwich', 'apple'), pile(1731, 574, 67, 'lantern'), pile(1517, 668, 82, 'disc'), pile(1727, 712, 87, 'ball'), pile(1013, 571, 75, 'disc'), pile(1267, 602, 68, 'disc', 'sandwich'), pile(926, 743, 83, 'towel', 'lantern'), pile(1043, 736, 94, 'ball'), pile(1154, 568, 75, 'disc'), pile(1454, 737, 101, 'towel', 'sandwich'), pile(1719, 644, 83, 'disc')]
       }]);
       cclegacy._RF.pop();
     }
